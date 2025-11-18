@@ -12,6 +12,7 @@ import os
 import sys
 from datetime import datetime
 from typing import List, Dict
+from collections import Counter
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -681,162 +682,205 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         f.write("---\n\n")
 
         # === INTELLIGENCE ANALYSIS ===
-        f.write("## 🧠 Intelligence Analysis\n\n")
-        f.write("*Advanced analytics and pattern recognition*\n\n")
+        try:
+            f.write("## 🧠 Intelligence Analysis\n\n")
+            f.write("*Advanced analytics and pattern recognition*\n\n")
 
-        # 1. Network Analysis
-        if graph_metrics and graph_metrics.get('network_stats'):
-            f.write("### 🕸️ Network & Connections\n\n")
-            stats = graph_metrics.get('network_stats', {})
-            f.write(f"- **Platforms Connected:** {stats.get('num_nodes', 0)}\n")
-            f.write(f"- **Cross-Platform Links:** {stats.get('num_edges', 0)}\n")
-            f.write(f"- **Network Density:** {stats.get('density', 0):.2%}\n")
+            # 1. Network Analysis
+            if graph_metrics and isinstance(graph_metrics, dict) and graph_metrics.get('network_stats'):
+                try:
+                    f.write("### 🕸️ Network & Connections\n\n")
+                    stats = graph_metrics.get('network_stats', {})
+                    f.write(f"- **Platforms Connected:** {stats.get('num_nodes', 0)}\n")
+                    f.write(f"- **Cross-Platform Links:** {stats.get('num_edges', 0)}\n")
+                    density = stats.get('density', 0)
+                    if isinstance(density, (int, float)):
+                        f.write(f"- **Network Density:** {density:.2%}\n")
 
-            # Central platforms
-            central = graph_metrics.get('central_nodes', [])
-            if central:
-                f.write(f"\n**Most Connected Platforms:**\n")
-                for platform, score in central[:3]:
-                    f.write(f"- {platform}: {score:.2f} centrality\n")
-            f.write("\n")
+                    # Central platforms
+                    central = graph_metrics.get('central_nodes', [])
+                    if central and isinstance(central, list):
+                        f.write(f"\n**Most Connected Platforms:**\n")
+                        for item in central[:3]:
+                            if isinstance(item, tuple) and len(item) == 2:
+                                platform, score = item
+                                f.write(f"- {platform}: {score:.2f} centrality\n")
+                    f.write("\n")
+                except Exception as e:
+                    logger.warning(f"Error writing network analysis: {e}")
+                    f.write("*Network analysis data unavailable*\n\n")
 
-        # 2. Behavioral Patterns
-        if behavioral_profiles:
-            f.write("### 🎭 Behavioral Fingerprint\n\n")
-            # Aggregate patterns across all accounts
-            all_interests = []
-            all_keywords = []
-            writing_styles = []
+            # 2. Behavioral Patterns
+            if behavioral_profiles and isinstance(behavioral_profiles, list):
+                try:
+                    f.write("### 🎭 Behavioral Fingerprint\n\n")
+                    # Aggregate patterns across all accounts
+                    all_interests = []
+                    all_keywords = []
+                    writing_styles = []
 
-            for profile in behavioral_profiles:
-                if isinstance(profile, dict):
-                    all_interests.extend(profile.get('interests', []))
-                    all_keywords.extend(profile.get('key_phrases', []))
-                    if profile.get('writing_style'):
-                        writing_styles.append(profile['writing_style'])
+                    for profile in behavioral_profiles:
+                        if isinstance(profile, dict):
+                            interests = profile.get('interests', [])
+                            if isinstance(interests, list):
+                                all_interests.extend(interests)
 
-            # Top interests
-            if all_interests:
-                from collections import Counter
-                interest_counts = Counter(all_interests)
-                f.write("**Primary Interests:**\n")
-                for interest, count in interest_counts.most_common(5):
-                    f.write(f"- {interest} ({count} mentions)\n")
-                f.write("\n")
+                            key_phrases = profile.get('key_phrases', [])
+                            if isinstance(key_phrases, list):
+                                all_keywords.extend(key_phrases)
 
-            # Top keywords
-            if all_keywords:
-                from collections import Counter
-                keyword_counts = Counter(all_keywords)
-                f.write("**Common Keywords:**\n")
-                for keyword, count in keyword_counts.most_common(10):
-                    f.write(f"- {keyword} ({count}x)\n")
-                f.write("\n")
+                            if profile.get('writing_style'):
+                                writing_styles.append(profile['writing_style'])
 
-        # 3. Activity Patterns
-        if temporal_patterns:
-            f.write("### ⏰ Activity Patterns\n\n")
-            active_times = []
-            active_days = []
+                    # Top interests
+                    if all_interests:
+                        interest_counts = Counter(all_interests)
+                        f.write("**Primary Interests:**\n")
+                        for interest, count in interest_counts.most_common(5):
+                            f.write(f"- {interest} ({count} mentions)\n")
+                        f.write("\n")
 
-            for pattern in temporal_patterns:
-                if isinstance(pattern, dict):
-                    if pattern.get('most_active_hours'):
-                        active_times.extend(pattern['most_active_hours'])
-                    if pattern.get('most_active_days'):
-                        active_days.extend(pattern['most_active_days'])
+                    # Top keywords
+                    if all_keywords:
+                        keyword_counts = Counter(all_keywords)
+                        f.write("**Common Keywords:**\n")
+                        for keyword, count in keyword_counts.most_common(10):
+                            f.write(f"- {keyword} ({count}x)\n")
+                        f.write("\n")
+                except Exception as e:
+                    logger.warning(f"Error writing behavioral analysis: {e}")
+                    f.write("*Behavioral analysis data unavailable*\n\n")
 
-            if active_times:
-                from collections import Counter
-                hour_counts = Counter(active_times)
-                peak_hours = hour_counts.most_common(3)
-                f.write("**Peak Activity Times:**\n")
-                for hour, count in peak_hours:
-                    f.write(f"- {hour}:00 ({count} occurrences)\n")
-                f.write("\n")
+            # 3. Activity Patterns
+            if temporal_patterns and isinstance(temporal_patterns, list):
+                try:
+                    f.write("### ⏰ Activity Patterns\n\n")
+                    active_times = []
+                    active_days = []
 
-            if active_days:
-                from collections import Counter
-                day_counts = Counter(active_days)
-                peak_days = day_counts.most_common(3)
-                f.write("**Most Active Days:**\n")
-                for day, count in peak_days:
-                    f.write(f"- {day} ({count} posts)\n")
-                f.write("\n")
+                    for pattern in temporal_patterns:
+                        if isinstance(pattern, dict):
+                            hours = pattern.get('most_active_hours', [])
+                            if isinstance(hours, list):
+                                active_times.extend(hours)
 
-        # 4. Cross-Platform Correlations
-        f.write("### 🔗 Cross-Platform Insights\n\n")
-        usernames = set()
-        locations = set()
-        common_themes = []
+                            days = pattern.get('most_active_days', [])
+                            if isinstance(days, list):
+                                active_days.extend(days)
 
-        for account in enriched_accounts:
-            if account:
-                username = account.get('username') or account.get('name')
-                if username:
-                    usernames.add(username)
-                if account.get('location'):
-                    locations.add(account['location'])
-                if account.get('bio'):
-                    common_themes.append(account['bio'])
+                    if active_times:
+                        hour_counts = Counter(active_times)
+                        peak_hours = hour_counts.most_common(3)
+                        f.write("**Peak Activity Times:**\n")
+                        for hour, count in peak_hours:
+                            f.write(f"- {hour}:00 ({count} occurrences)\n")
+                        f.write("\n")
 
-        if usernames:
-            f.write(f"**Username Variations Found:** {len(usernames)}\n")
-            for username in list(usernames)[:5]:
-                f.write(f"- {username}\n")
-            f.write("\n")
+                    if active_days:
+                        day_counts = Counter(active_days)
+                        peak_days = day_counts.most_common(3)
+                        f.write("**Most Active Days:**\n")
+                        for day, count in peak_days:
+                            f.write(f"- {day} ({count} posts)\n")
+                        f.write("\n")
+                except Exception as e:
+                    logger.warning(f"Error writing activity patterns: {e}")
+                    f.write("*Activity pattern data unavailable*\n\n")
 
-        if locations:
-            f.write(f"**Locations Mentioned:** {', '.join(locations)}\n\n")
+            # 4. Cross-Platform Correlations
+            try:
+                f.write("### 🔗 Cross-Platform Insights\n\n")
+                usernames = set()
+                locations = set()
+                common_themes = []
 
-        # 5. Data Quality & Confidence Score
-        f.write("### 📊 Data Quality Assessment\n\n")
+                if enriched_accounts and isinstance(enriched_accounts, list):
+                    for account in enriched_accounts:
+                        if account and isinstance(account, dict):
+                            username = account.get('username') or account.get('name')
+                            if username and isinstance(username, str):
+                                usernames.add(username)
 
-        # Calculate overall quality
-        total_data_points = 0
-        accounts_with_bios = 0
-        accounts_with_locations = 0
-        accounts_with_posts = 0
+                            location = account.get('location')
+                            if location and isinstance(location, str):
+                                locations.add(location)
 
-        for acc in enriched_accounts:
-            if acc:
-                if acc.get('name'):
-                    total_data_points += 1
-                if acc.get('bio'):
-                    total_data_points += 1
-                    accounts_with_bios += 1
-                if acc.get('location'):
-                    total_data_points += 1
-                    accounts_with_locations += 1
-                posts = acc.get('posts', [])
-                if posts:
-                    total_data_points += len(posts)
-                    accounts_with_posts += 1
+                            bio = account.get('bio')
+                            if bio and isinstance(bio, str):
+                                common_themes.append(bio)
 
-        avg_data_per_account = total_data_points / max(len(enriched_accounts), 1)
-        confidence = min(100, avg_data_per_account * 15)
+                if usernames:
+                    f.write(f"**Username Variations Found:** {len(usernames)}\n")
+                    for username in list(usernames)[:5]:
+                        f.write(f"- {username}\n")
+                    f.write("\n")
 
-        f.write(f"**Overall Confidence Score:** {confidence:.1f}%\n\n")
-        f.write("**Data Breakdown:**\n")
-        f.write(f"- Total data points collected: {total_data_points}\n")
-        f.write(f"- Accounts with bios: {accounts_with_bios}/{len(enriched_accounts)}\n")
-        f.write(f"- Accounts with locations: {accounts_with_locations}/{len(enriched_accounts)}\n")
-        f.write(f"- Accounts with posts: {accounts_with_posts}/{len(enriched_accounts)}\n")
-        f.write(f"- Average data per account: {avg_data_per_account:.1f} points\n")
+                if locations:
+                    f.write(f"**Locations Mentioned:** {', '.join(list(locations)[:5])}\n\n")
+            except Exception as e:
+                logger.warning(f"Error writing cross-platform insights: {e}")
+                f.write("*Cross-platform correlation data unavailable*\n\n")
 
-        # Quality assessment
-        if confidence >= 80:
-            quality = "🟢 EXCELLENT - High confidence in findings"
-        elif confidence >= 60:
-            quality = "🟡 GOOD - Reliable intelligence gathered"
-        elif confidence >= 40:
-            quality = "🟠 FAIR - Some data gaps exist"
-        else:
-            quality = "🔴 LIMITED - Additional research recommended"
+            # 5. Data Quality & Confidence Score
+            try:
+                f.write("### 📊 Data Quality Assessment\n\n")
 
-        f.write(f"\n**Assessment:** {quality}\n")
+                # Calculate overall quality
+                total_data_points = 0
+                accounts_with_bios = 0
+                accounts_with_locations = 0
+                accounts_with_posts = 0
 
-        f.write("\n---\n\n")
+                if enriched_accounts and isinstance(enriched_accounts, list):
+                    for acc in enriched_accounts:
+                        if acc and isinstance(acc, dict):
+                            if acc.get('name'):
+                                total_data_points += 1
+                            if acc.get('bio'):
+                                total_data_points += 1
+                                accounts_with_bios += 1
+                            if acc.get('location'):
+                                total_data_points += 1
+                                accounts_with_locations += 1
+                            posts = acc.get('posts', [])
+                            if posts and isinstance(posts, list):
+                                total_data_points += len(posts)
+                                accounts_with_posts += 1
+
+                num_accounts = max(len(enriched_accounts), 1)
+                avg_data_per_account = total_data_points / num_accounts
+                confidence = min(100, avg_data_per_account * 15)
+
+                f.write(f"**Overall Confidence Score:** {confidence:.1f}%\n\n")
+                f.write("**Data Breakdown:**\n")
+                f.write(f"- Total data points collected: {total_data_points}\n")
+                f.write(f"- Accounts with bios: {accounts_with_bios}/{num_accounts}\n")
+                f.write(f"- Accounts with locations: {accounts_with_locations}/{num_accounts}\n")
+                f.write(f"- Accounts with posts: {accounts_with_posts}/{num_accounts}\n")
+                f.write(f"- Average data per account: {avg_data_per_account:.1f} points\n")
+
+                # Quality assessment
+                if confidence >= 80:
+                    quality = "🟢 EXCELLENT - High confidence in findings"
+                elif confidence >= 60:
+                    quality = "🟡 GOOD - Reliable intelligence gathered"
+                elif confidence >= 40:
+                    quality = "🟠 FAIR - Some data gaps exist"
+                else:
+                    quality = "🔴 LIMITED - Additional research recommended"
+
+                f.write(f"\n**Assessment:** {quality}\n")
+            except Exception as e:
+                logger.warning(f"Error calculating data quality: {e}")
+                f.write("**Overall Confidence Score:** N/A\n")
+                f.write("*Quality assessment unavailable*\n")
+
+            f.write("\n---\n\n")
+
+        except Exception as e:
+            logger.error(f"Error generating intelligence analysis section: {e}")
+            f.write("*Intelligence analysis section unavailable due to processing error*\n\n")
+            f.write("---\n\n")
 
         # Discovered Emails
         if discovered_emails:

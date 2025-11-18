@@ -4,13 +4,30 @@ Improves data extraction success rate
 """
 
 import requests
-from bs4 import BeautifulSoup
 from typing import Dict, Optional
 from urllib.parse import urlparse
-from .utils import setup_logger
-from .scrapers import AccountScraper  # Import existing scraper
 
-logger = setup_logger(__name__)
+# Try to import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
+
+# Try to import existing scraper
+try:
+    from .scrapers import AccountScraper
+    BASE_SCRAPER_AVAILABLE = True
+except (ImportError, AttributeError):
+    BASE_SCRAPER_AVAILABLE = False
+
+# Try to import logger
+try:
+    from .utils import setup_logger
+    logger = setup_logger(__name__)
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
 
 
 class EnhancedScraper:
@@ -25,11 +42,28 @@ class EnhancedScraper:
     """
 
     def __init__(self):
-        self.base_scraper = AccountScraper()
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        """Initialize enhanced scraper with fallback support"""
+        # Try to initialize base scraper if available
+        if BASE_SCRAPER_AVAILABLE:
+            try:
+                self.base_scraper = AccountScraper()
+                logger.info("Base Selenium scraper initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize base scraper: {e}")
+                self.base_scraper = None
+        else:
+            self.base_scraper = None
+            logger.info("Base scraper not available, using fallback methods only")
+
+        # Initialize requests session
+        try:
+            self.session = requests.Session()
+            self.session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+        except Exception as e:
+            logger.error(f"Failed to create session: {e}")
+            self.session = None
 
     def scrape_with_fallbacks(self, url: str) -> Dict:
         """
@@ -43,16 +77,19 @@ class EnhancedScraper:
         """
         platform = self._detect_platform(url)
 
-        # Method 1: Try existing Selenium scraper first
-        try:
-            logger.debug(f"Attempting Selenium scrape: {url}")
-            data = self.base_scraper.scrape_account(url)
-            if self._has_useful_data(data):
-                data['scrape_method'] = 'selenium'
-                logger.info(f"✅ Selenium scrape successful: {url}")
-                return data
-        except Exception as e:
-            logger.debug(f"Selenium failed for {url}: {e}")
+        # Method 1: Try existing Selenium scraper first (if available)
+        if self.base_scraper:
+            try:
+                logger.debug(f"Attempting Selenium scrape: {url}")
+                data = self.base_scraper.scrape_account(url)
+                if self._has_useful_data(data):
+                    data['scrape_method'] = 'selenium'
+                    logger.info(f"✅ Selenium scrape successful: {url}")
+                    return data
+            except Exception as e:
+                logger.debug(f"Selenium failed for {url}: {e}")
+        else:
+            logger.debug(f"Selenium scraper not available for {url}")
 
         # Method 2: Try requests + BeautifulSoup (faster, no browser)
         try:
@@ -100,8 +137,18 @@ class EnhancedScraper:
         Returns:
             Extracted data
         """
-        response = self.session.get(url, timeout=15)
-        response.raise_for_status()
+        if not self.session:
+            raise Exception("Session not initialized")
+
+        if not BS4_AVAILABLE:
+            raise Exception("BeautifulSoup not available")
+
+        try:
+            response = self.session.get(url, timeout=15)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Request failed for {url}: {e}")
+            raise
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -182,13 +229,21 @@ class EnhancedScraper:
             'bio': None
         }
 
+        if not self.session:
+            logger.warning("Session not available for platform-specific scrape")
+            return data
+
         # GitHub specific
         if 'github.com' in url:
-            username = url.rstrip('/').split('/')[-1]
-            # Try GitHub API (public, no auth needed)
             try:
+                username = url.rstrip('/').split('/')[-1]
+                if not username:
+                    return data
+
+                # Try GitHub API (public, no auth needed)
                 api_url = f'https://api.github.com/users/{username}'
                 response = self.session.get(api_url, timeout=10)
+
                 if response.status_code == 200:
                     gh_data = response.json()
                     data['name'] = gh_data.get('name') or gh_data.get('login')
@@ -196,9 +251,12 @@ class EnhancedScraper:
                     data['location'] = gh_data.get('location')
                     data['followers'] = gh_data.get('followers')
                     data['public_repos'] = gh_data.get('public_repos')
+                    logger.debug(f"GitHub API scrape successful for {username}")
                     return data
-            except:
-                pass
+                else:
+                    logger.debug(f"GitHub API returned {response.status_code} for {username}")
+            except Exception as e:
+                logger.debug(f"GitHub API scrape failed: {e}")
 
         # Add more platform-specific extractors here
         # YouTube, Twitter/X, LinkedIn, etc.

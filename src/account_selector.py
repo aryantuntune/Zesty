@@ -170,22 +170,36 @@ class AccountSelector:
         location = account.get('location', 'N/A')
         followers = account.get('followers', 'N/A')
 
-        # Calculate quality score
-        quality_score = account.get('quality_score') or self.score_account_quality(account)
+        # Calculate quality score safely
+        try:
+            quality_score = account.get('quality_score')
+            if quality_score is None:
+                quality_score = self.score_account_quality(account)
+        except Exception as e:
+            logger.warning(f"Failed to calculate quality score: {e}")
+            quality_score = 0
 
         # Quality indicator
-        if quality_score >= 80:
-            quality_indicator = "🟢 EXCELLENT"
-        elif quality_score >= 50:
-            quality_indicator = "🟡 GOOD"
-        elif quality_score >= 20:
-            quality_indicator = "🟠 FAIR"
-        else:
-            quality_indicator = "🔴 POOR"
+        try:
+            if quality_score >= 80:
+                quality_indicator = "🟢 EXCELLENT"
+            elif quality_score >= 50:
+                quality_indicator = "🟡 GOOD"
+            elif quality_score >= 20:
+                quality_indicator = "🟠 FAIR"
+            else:
+                quality_indicator = "🔴 POOR"
+        except:
+            quality_indicator = "❓ UNKNOWN"
+            quality_score = 0
 
-        # Truncate bio
-        if bio and len(bio) > 150:
-            bio = bio[:147] + "..."
+        # Truncate bio safely
+        try:
+            if bio and bio != 'N/A' and len(str(bio)) > 150:
+                bio = str(bio)[:147] + "..."
+        except Exception as e:
+            logger.debug(f"Error truncating bio: {e}")
+            bio = 'N/A'
 
         preview = f"""
 {'='*70}

@@ -5,11 +5,16 @@ Reduces false positives from Sherlock reconnaissance
 """
 
 import requests
-from typing import Dict, List
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
-from .utils import setup_logger
+import time
 
-logger = setup_logger(__name__)
+try:
+    from .utils import setup_logger
+    logger = setup_logger(__name__)
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
 
 
 class URLVerifier:
@@ -23,13 +28,26 @@ class URLVerifier:
     - Caches results to avoid duplicate checks
     """
 
-    def __init__(self, timeout: int = 10):
+    def __init__(self, timeout: int = 10, rate_limit: float = 0.5):
+        """
+        Initialize URL verifier
+
+        Args:
+            timeout: Request timeout in seconds
+            rate_limit: Delay between requests in seconds (to avoid rate limiting)
+        """
         self.timeout = timeout
+        self.rate_limit = rate_limit
         self.verified_cache = {}  # Cache to avoid duplicate checks
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+
+        try:
+            self.session = requests.Session()
+            self.session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+        except Exception as e:
+            logger.error(f"Failed to create session: {e}")
+            raise
 
     def verify_url(self, url: str) -> Dict:
         """
@@ -128,7 +146,7 @@ class URLVerifier:
 
     def batch_verify(self, urls: List[str], show_progress: bool = True) -> Dict[str, Dict]:
         """
-        Verify multiple URLs
+        Verify multiple URLs with rate limiting
 
         Args:
             urls: List of URLs to verify
@@ -137,17 +155,29 @@ class URLVerifier:
         Returns:
             Dictionary mapping URL -> verification result
         """
+        if not urls:
+            logger.warning("No URLs provided for verification")
+            return {}
+
         results = {}
         total = len(urls)
 
         for i, url in enumerate(urls, 1):
+            if not url or not isinstance(url, str):
+                logger.warning(f"Invalid URL at index {i}: {url}")
+                continue
+
             if show_progress and i % 10 == 0:
                 logger.info(f"Verified {i}/{total} URLs...")
 
             results[url] = self.verify_url(url)
 
+            # Rate limiting to avoid being blocked
+            if i < total:  # Don't delay after last URL
+                time.sleep(self.rate_limit)
+
         if show_progress:
-            exists_count = sum(1 for r in results.values() if r['exists'])
+            exists_count = sum(1 for r in results.values() if r.get('exists', False))
             logger.info(f"Verification complete: {exists_count}/{total} URLs exist")
 
         return results
@@ -162,8 +192,18 @@ class URLVerifier:
         Returns:
             List of URLs that exist
         """
-        results = self.batch_verify(urls, show_progress=False)
-        return [url for url, result in results.items() if result['exists']]
+        if not urls:
+            return []
+
+        try:
+            results = self.batch_verify(urls, show_progress=False)
+            existing = [url for url, result in results.items() if result.get('exists', False)]
+            logger.info(f"Filtered {len(urls)} URLs down to {len(existing)} existing URLs")
+            return existing
+        except Exception as e:
+            logger.error(f"Error filtering URLs: {e}")
+            # Return original list if verification fails (don't lose data)
+            return urls
 
     def get_verification_stats(self) -> Dict:
         """
