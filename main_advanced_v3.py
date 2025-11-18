@@ -495,8 +495,9 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     for account in enriched_accounts:
         if not account:
             continue
-        emails = email_finder.find_emails(account)
-        discovered_emails.extend(emails)
+        email_result = email_finder.find_emails_in_account(account)
+        discovered_emails.extend(email_result.get('found_emails', []))
+        discovered_emails.extend(email_result.get('verified_emails', []))
     discovered_emails = list(set(discovered_emails))
 
     # === Wayback Analysis ===
@@ -507,9 +508,13 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
             continue
         url = account.get('url')
         if url:
-            history = wayback_analyzer.get_account_history(url)
+            history = wayback_analyzer.get_historical_profile(url, months_ago=6)
             if history:
-                wayback_results.append(history)
+                wayback_results.append({
+                    'url': url,
+                    'platform': account.get('platform'),
+                    'snapshots': history
+                })
 
     # === Username Generation (with AI) ===
     print("[7/11] 🤖 ML Username Variation Generation...")
@@ -525,18 +530,22 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     # === Pivoting ===
     print("[8/11] 🔄 Cross-Platform Pivoting...")
     pivot_engine = PivotEngine()
-    pivot_leads = pivot_engine.pivot_from_accounts(enriched_accounts)
+    pivot_leads = pivot_engine.cross_validate(enriched_accounts)
 
     # === Behavioral Analysis ===
     print("[9/11] 🎭 Behavioral Fingerprinting...")
     behavioral = BehavioralAnalyzer()
-    behavioral_profile = behavioral.build_behavioral_profile(enriched_accounts)
+    behavioral_profiles = []
+    for account in enriched_accounts:
+        if account:
+            profile = behavioral.build_behavioral_profile(account)
+            behavioral_profiles.append(profile)
 
     # === Timeline Visualization ===
     print("[10/11] 📊 Interactive Timeline Generation...")
     timeline_file = None
     try:
-        timeline_file = timeline_viz.create_timeline(enriched_accounts, target_name)
+        timeline_file = timeline_viz.create_activity_timeline(enriched_accounts, target_name)
         if timeline_file:
             print(f"    ✅ Timeline saved: {timeline_file}")
     except Exception as e:
@@ -546,7 +555,7 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     print("[11/11] 🔥 Activity Heatmap Generation...")
     heatmap_file = None
     try:
-        heatmap_file = heatmap_gen.generate_heatmap(enriched_accounts, target_name)
+        heatmap_file = heatmap_gen.create_activity_heatmap(enriched_accounts, target_name)
         if heatmap_file:
             print(f"    ✅ Heatmap saved: {heatmap_file}")
     except Exception as e:
