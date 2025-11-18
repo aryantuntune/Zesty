@@ -87,7 +87,7 @@ class EnhancedScraper:
                 if self._has_useful_data(data):
                     data['scrape_method'] = 'selenium'
                     data['quality_score'] = self.score_data_quality(data)
-                    logger.info(f"✅ Selenium scrape successful: {url} (quality: {data['quality_score']})")
+                    logger.info(f"Selenium scrape successful: {url} (quality: {data['quality_score']})")
                     return data
             except Exception as e:
                 logger.debug(f"Selenium failed for {url}: {e}")
@@ -101,7 +101,7 @@ class EnhancedScraper:
             if self._has_useful_data(data):
                 data['scrape_method'] = 'requests'
                 data['quality_score'] = self.score_data_quality(data)
-                logger.info(f"✅ Static scrape successful: {url} (quality: {data['quality_score']})")
+                logger.info(f"Static scrape successful: {url} (quality: {data['quality_score']})")
                 return data
         except Exception as e:
             logger.debug(f"Requests scrape failed for {url}: {e}")
@@ -113,7 +113,7 @@ class EnhancedScraper:
             if self._has_useful_data(data):
                 data['scrape_method'] = 'platform_specific'
                 data['quality_score'] = self.score_data_quality(data)
-                logger.info(f"✅ Platform-specific scrape successful: {url} (quality: {data['quality_score']})")
+                logger.info(f"Platform-specific scrape successful: {url} (quality: {data['quality_score']})")
                 return data
         except Exception as e:
             logger.debug(f"Platform-specific scrape failed for {url}: {e}")
@@ -376,7 +376,7 @@ class EnhancedScraper:
                     data['languages'] = list(languages)
                     data['primary_language'] = list(languages)[0] if languages else None
 
-                logger.info(f"✅ GitHub full extraction: {username} ({len(data.get('posts', []))} repos)")
+                logger.info(f"GitHub full extraction: {username} ({len(data.get('posts', []))} repos)")
                 return data
 
         except Exception as e:
@@ -428,7 +428,7 @@ class EnhancedScraper:
             if posts:
                 data['posts'] = posts
 
-            logger.info(f"✅ YouTube extraction: {data.get('name')} ({len(posts)} videos)")
+            logger.info(f"YouTube extraction: {data.get('name')} ({len(posts)} videos)")
 
         except Exception as e:
             logger.debug(f"YouTube extraction failed: {e}")
@@ -477,7 +477,7 @@ class EnhancedScraper:
             if posts:
                 data['posts'] = posts
 
-            logger.info(f"✅ Pinterest extraction: {data.get('name')} ({len(posts)} pins)")
+            logger.info(f"Pinterest extraction: {data.get('name')} ({len(posts)} pins)")
 
         except Exception as e:
             logger.debug(f"Pinterest extraction failed: {e}")
@@ -527,7 +527,7 @@ class EnhancedScraper:
             if posts:
                 data['posts'] = posts
 
-            logger.info(f"✅ Academia.edu extraction: {data.get('name')} ({len(posts)} papers)")
+            logger.info(f"Academia.edu extraction: {data.get('name')} ({len(posts)} papers)")
 
         except Exception as e:
             logger.debug(f"Academia.edu extraction failed: {e}")
@@ -580,7 +580,7 @@ class EnhancedScraper:
             if posts:
                 data['posts'] = posts
 
-            logger.info(f"✅ Disqus extraction: {data.get('name')} ({len(posts)} comments)")
+            logger.info(f"Disqus extraction: {data.get('name')} ({len(posts)} comments)")
 
         except Exception as e:
             logger.debug(f"Disqus extraction failed: {e}")

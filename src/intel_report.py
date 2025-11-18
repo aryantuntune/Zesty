@@ -305,8 +305,9 @@ The subject maintains a digital footprint across {len(accounts)} verified platfo
         for acc in accounts:
             if acc and acc.get('email'):
                 emails.add(acc.get('email'))
-            # Extract from bio
-            bio = acc.get('bio', '') if acc else ''
+            # Extract from bio (handle None values)
+            bio = acc.get('bio') if acc else None
+            bio = bio if bio is not None else ''  # Convert None to empty string
             email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
             found_emails = re.findall(email_pattern, bio)
             emails.update(found_emails)
@@ -497,7 +498,8 @@ The subject maintains a digital footprint across {len(accounts)} verified platfo
         for acc in accounts:
             if acc and acc.get('email'):
                 emails_found.append(acc.get('email'))
-            bio = acc.get('bio', '') if acc else ''
+            bio = acc.get('bio') if acc else None
+            bio = bio if bio is not None else ''  # Convert None to empty string
             email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
             found = re.findall(email_pattern, bio)
             emails_found.extend(found)
@@ -585,7 +587,8 @@ The subject maintains a digital footprint across {len(accounts)} verified platfo
         for acc in accounts:
             if not acc:
                 continue
-            bio = acc.get('bio', '')
+            bio = acc.get('bio')
+            bio = bio if bio is not None else ''  # Convert None to empty string
             # Look for relationship indicators
             if re.search(r'(father|mother|brother|sister|husband|wife|partner)', bio, re.IGNORECASE):
                 relationships.append(f"{acc.get('platform', 'unknown')}: Family relationships mentioned in bio")
