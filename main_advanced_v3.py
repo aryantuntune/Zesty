@@ -39,6 +39,7 @@ from src.local_ai import LocalAI  # NEW!
 from src.url_verifier import URLVerifier  # NEW!
 from src.enhanced_scraper import EnhancedScraper  # NEW!
 from src.intel_report import IntelligenceReportGenerator  # NEW!
+from src.pivot import PivotEngine  # Basic cross-platform pivoting
 from src.pivot_engine import PivotEngine as AutoPivotEngine  # Professional OSINT Pivoting
 from src.transforms.base_transform import Selector, SelectorType  # Pivot data structures
 from src.verification import VerificationEngine  # 3-source verification
