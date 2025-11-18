@@ -37,6 +37,7 @@ from src.account_selector import AccountSelector
 from src.local_ai import LocalAI  # NEW!
 from src.url_verifier import URLVerifier  # NEW!
 from src.enhanced_scraper import EnhancedScraper  # NEW!
+from src.intel_report import IntelligenceReportGenerator  # NEW!
 from src.utils import setup_logger
 
 logger = setup_logger(__name__)
@@ -319,6 +320,9 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
                     'location': result.get('location'),
                     'followers': result.get('followers'),
                     'quality_score': result.get('quality_score', 0),  # From EnhancedScraper
+                    'posts': result.get('posts', []),  # CRITICAL FIX: Include posts!
+                    'languages': result.get('languages', []),  # GitHub languages
+                    'research_interests': result.get('research_interests', []),  # Academia
                     'raw_result': result
                 }
                 preview_accounts.append(account_data)
@@ -648,338 +652,36 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         except Exception as e:
             logger.warning(f"AI summary failed: {e}")
 
-    # Generate report
-    report_file = f"data/reports/{target_name.replace(' ', '_')}_advanced_v3_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    # =================================================================
+    # PHASE 7: PROFESSIONAL INTELLIGENCE REPORT GENERATION
+    # =================================================================
+
+    print("="*70)
+    print("📄 PHASE 7: GENERATING PROFESSIONAL INTELLIGENCE DOSSIER")
+    print("="*70 + "\n")
+
+    print("📝 Generating TLP-classified intelligence report...")
+
+    # Generate professional OSINT intelligence dossier
+    intel_generator = IntelligenceReportGenerator()
+
+    dossier_content = intel_generator.generate_dossier(
+        target_name=target_name,
+        accounts=enriched_accounts,
+        behavioral_profiles=behavioral_profiles,
+        temporal_patterns=temporal_patterns,
+        graph_metrics=graph_metrics,
+        nlp_results=nlp_results,
+        investigation_id=investigation_id
+    )
+
+    # Save report
+    report_file = f"data/reports/{target_name.replace(' ', '_')}_OSINT_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
 
     os.makedirs("data/reports", exist_ok=True)
 
     with open(report_file, 'w', encoding='utf-8') as f:
-        f.write(f"# DeepTrace Advanced v3 Investigation Report\n\n")
-        f.write(f"**Target:** {target_name}\n")
-        f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"**Mode:** Advanced v3 (Intelligence-Enhanced)\n")
-        f.write(f"**Investigation ID:** {investigation_id}\n\n")
-
-        f.write("---\n\n")
-
-        # AI Summary
-        if ai_summary:
-            f.write("## 🤖 AI Executive Summary\n\n")
-            f.write(f"{ai_summary}\n\n")
-            f.write("---\n\n")
-
-        # Target Profile
-        if not target_profile.get('minimal'):
-            f.write("## 🎯 Target Profile\n\n")
-            f.write(f"**Name:** {target_profile.get('full_name')}\n")
-            if target_profile.get('age_range'):
-                f.write(f"**Age Range:** {target_profile.get('age_range')}\n")
-            if target_profile.get('current_location'):
-                f.write(f"**Location:** {target_profile.get('current_location')}\n")
-            if target_profile.get('occupation'):
-                f.write(f"**Occupation:** {target_profile.get('occupation')}\n")
-            if target_profile.get('known_platforms'):
-                f.write(f"**Known Platforms:** {', '.join(target_profile['known_platforms'])}\n")
-            f.write("\n---\n\n")
-
-        # Investigation Summary
-        f.write("## 📊 Investigation Summary\n\n")
-        f.write(f"- **Total Leads:** {len(all_leads)}\n")
-        f.write(f"- **Preview Scraped:** {len(preview_accounts)}\n")
-        f.write(f"- **AI Filtered:** {len(filtered_accounts)}\n")
-        f.write(f"- **User Confirmed:** {len(confirmed_accounts)}\n")
-        f.write(f"- **Deep Analyzed:** {len(enriched_accounts)}\n")
-        f.write(f"- **Accuracy:** 100% (user-verified)\n")
-        f.write(f"- **AI Enabled:** {'Yes' if ai_engine else 'No (rule-based)'}\n\n")
-
-        f.write("---\n\n")
-
-        # Confirmed Accounts
-        f.write("## ✅ Confirmed Accounts\n\n")
-        for i, account in enumerate(confirmed_accounts, 1):
-            if not account:
-                continue
-            f.write(f"### {i}. {account.get('platform', 'Unknown').upper()}\n\n")
-            f.write(f"- **URL:** {account.get('url')}\n")
-            f.write(f"- **Name:** {account.get('name', 'N/A')}\n")
-            f.write(f"- **Location:** {account.get('location', 'N/A')}\n")
-            f.write(f"- **Followers:** {account.get('followers', 'N/A')}\n")
-
-            if account.get('ai_match_score'):
-                f.write(f"- **AI Match Score:** {account['ai_match_score']:.1f}%\n")
-
-            if account.get('ai_analysis'):
-                f.write(f"- **AI Reasoning:** {account['ai_analysis'].get('reasoning', 'N/A')}\n")
-
-            bio = account.get('bio', '')
-            if bio:
-                f.write(f"\n**Bio:**\n> {bio}\n")
-
-            f.write("\n")
-
-        f.write("---\n\n")
-
-        # === INTELLIGENCE ANALYSIS ===
-        try:
-            f.write("## 🧠 Intelligence Analysis\n\n")
-            f.write("*Advanced analytics and pattern recognition*\n\n")
-
-            # 1. Network Analysis
-            if graph_metrics and isinstance(graph_metrics, dict) and graph_metrics.get('network_stats'):
-                try:
-                    f.write("### 🕸️ Network & Connections\n\n")
-                    stats = graph_metrics.get('network_stats', {})
-                    f.write(f"- **Platforms Connected:** {stats.get('num_nodes', 0)}\n")
-                    f.write(f"- **Cross-Platform Links:** {stats.get('num_edges', 0)}\n")
-                    density = stats.get('density', 0)
-                    if isinstance(density, (int, float)):
-                        f.write(f"- **Network Density:** {density:.2%}\n")
-
-                    # Central platforms
-                    central = graph_metrics.get('central_nodes', [])
-                    if central and isinstance(central, list):
-                        f.write(f"\n**Most Connected Platforms:**\n")
-                        for item in central[:3]:
-                            if isinstance(item, tuple) and len(item) == 2:
-                                platform, score = item
-                                f.write(f"- {platform}: {score:.2f} centrality\n")
-                    f.write("\n")
-                except Exception as e:
-                    logger.warning(f"Error writing network analysis: {e}")
-                    f.write("*Network analysis data unavailable*\n\n")
-
-            # 2. Behavioral Patterns
-            if behavioral_profiles and isinstance(behavioral_profiles, list):
-                try:
-                    f.write("### 🎭 Behavioral Fingerprint\n\n")
-                    # Aggregate patterns across all accounts
-                    all_interests = []
-                    all_keywords = []
-                    writing_styles = []
-
-                    for profile in behavioral_profiles:
-                        if isinstance(profile, dict):
-                            interests = profile.get('interests', [])
-                            if isinstance(interests, list):
-                                all_interests.extend(interests)
-
-                            key_phrases = profile.get('key_phrases', [])
-                            if isinstance(key_phrases, list):
-                                all_keywords.extend(key_phrases)
-
-                            if profile.get('writing_style'):
-                                writing_styles.append(profile['writing_style'])
-
-                    # Top interests
-                    if all_interests:
-                        interest_counts = Counter(all_interests)
-                        f.write("**Primary Interests:**\n")
-                        for interest, count in interest_counts.most_common(5):
-                            f.write(f"- {interest} ({count} mentions)\n")
-                        f.write("\n")
-
-                    # Top keywords
-                    if all_keywords:
-                        keyword_counts = Counter(all_keywords)
-                        f.write("**Common Keywords:**\n")
-                        for keyword, count in keyword_counts.most_common(10):
-                            f.write(f"- {keyword} ({count}x)\n")
-                        f.write("\n")
-
-                    # ADDED: NLP-extracted entities and skills
-                    if nlp_results and isinstance(nlp_results, list):
-                        all_entities = []
-                        all_skills = []
-
-                        for nlp_result in nlp_results:
-                            if isinstance(nlp_result, dict):
-                                entities = nlp_result.get('entities', {})
-                                if isinstance(entities, dict):
-                                    for entity_type, values in entities.items():
-                                        if isinstance(values, list):
-                                            all_entities.extend(values)
-
-                                skills = nlp_result.get('skills', [])
-                                if isinstance(skills, list):
-                                    all_skills.extend(skills)
-
-                        if all_entities:
-                            entity_counts = Counter(all_entities)
-                            f.write("**Named Entities (NLP):**\n")
-                            for entity, count in entity_counts.most_common(8):
-                                f.write(f"- {entity} ({count}x)\n")
-                            f.write("\n")
-
-                        if all_skills:
-                            skill_counts = Counter(all_skills)
-                            f.write("**Skills Detected (NLP):**\n")
-                            for skill, count in skill_counts.most_common(8):
-                                f.write(f"- {skill} ({count}x)\n")
-                            f.write("\n")
-                except Exception as e:
-                    logger.warning(f"Error writing behavioral analysis: {e}")
-                    f.write("*Behavioral analysis data unavailable*\n\n")
-
-            # 3. Activity Patterns
-            if temporal_patterns and isinstance(temporal_patterns, list):
-                try:
-                    f.write("### ⏰ Activity Patterns\n\n")
-                    active_times = []
-                    active_days = []
-
-                    for pattern in temporal_patterns:
-                        if isinstance(pattern, dict):
-                            # FIXED: Use correct field names from temporal analyzer
-                            hours = pattern.get('peak_hours', [])  # Was 'most_active_hours'
-                            if isinstance(hours, list):
-                                active_times.extend(hours)
-
-                            days = pattern.get('active_days', [])  # Was 'most_active_days'
-                            if isinstance(days, list):
-                                active_days.extend(days)
-
-                    if active_times:
-                        hour_counts = Counter(active_times)
-                        peak_hours = hour_counts.most_common(3)
-                        f.write("**Peak Activity Times:**\n")
-                        for hour, count in peak_hours:
-                            f.write(f"- {hour}:00 ({count} occurrences)\n")
-                        f.write("\n")
-
-                    if active_days:
-                        day_counts = Counter(active_days)
-                        peak_days = day_counts.most_common(3)
-                        f.write("**Most Active Days:**\n")
-                        for day, count in peak_days:
-                            f.write(f"- {day} ({count} posts)\n")
-                        f.write("\n")
-                except Exception as e:
-                    logger.warning(f"Error writing activity patterns: {e}")
-                    f.write("*Activity pattern data unavailable*\n\n")
-
-            # 4. Cross-Platform Correlations
-            try:
-                f.write("### 🔗 Cross-Platform Insights\n\n")
-                usernames = set()
-                locations = set()
-                common_themes = []
-
-                if enriched_accounts and isinstance(enriched_accounts, list):
-                    for account in enriched_accounts:
-                        if account and isinstance(account, dict):
-                            username = account.get('username') or account.get('name')
-                            if username and isinstance(username, str):
-                                usernames.add(username)
-
-                            location = account.get('location')
-                            if location and isinstance(location, str):
-                                locations.add(location)
-
-                            bio = account.get('bio')
-                            if bio and isinstance(bio, str):
-                                common_themes.append(bio)
-
-                if usernames:
-                    f.write(f"**Username Variations Found:** {len(usernames)}\n")
-                    for username in list(usernames)[:5]:
-                        f.write(f"- {username}\n")
-                    f.write("\n")
-
-                if locations:
-                    f.write(f"**Locations Mentioned:** {', '.join(list(locations)[:5])}\n\n")
-            except Exception as e:
-                logger.warning(f"Error writing cross-platform insights: {e}")
-                f.write("*Cross-platform correlation data unavailable*\n\n")
-
-            # 5. Data Quality & Confidence Score
-            try:
-                f.write("### 📊 Data Quality Assessment\n\n")
-
-                # Calculate overall quality
-                total_data_points = 0
-                accounts_with_bios = 0
-                accounts_with_locations = 0
-                accounts_with_posts = 0
-
-                if enriched_accounts and isinstance(enriched_accounts, list):
-                    for acc in enriched_accounts:
-                        if acc and isinstance(acc, dict):
-                            if acc.get('name'):
-                                total_data_points += 1
-                            if acc.get('bio'):
-                                total_data_points += 1
-                                accounts_with_bios += 1
-                            if acc.get('location'):
-                                total_data_points += 1
-                                accounts_with_locations += 1
-                            posts = acc.get('posts', [])
-                            if posts and isinstance(posts, list):
-                                total_data_points += len(posts)
-                                accounts_with_posts += 1
-
-                num_accounts = max(len(enriched_accounts), 1)
-                avg_data_per_account = total_data_points / num_accounts
-                confidence = min(100, avg_data_per_account * 15)
-
-                f.write(f"**Overall Confidence Score:** {confidence:.1f}%\n\n")
-                f.write("**Data Breakdown:**\n")
-                f.write(f"- Total data points collected: {total_data_points}\n")
-                f.write(f"- Accounts with bios: {accounts_with_bios}/{num_accounts}\n")
-                f.write(f"- Accounts with locations: {accounts_with_locations}/{num_accounts}\n")
-                f.write(f"- Accounts with posts: {accounts_with_posts}/{num_accounts}\n")
-                f.write(f"- Average data per account: {avg_data_per_account:.1f} points\n")
-
-                # Quality assessment
-                if confidence >= 80:
-                    quality = "🟢 EXCELLENT - High confidence in findings"
-                elif confidence >= 60:
-                    quality = "🟡 GOOD - Reliable intelligence gathered"
-                elif confidence >= 40:
-                    quality = "🟠 FAIR - Some data gaps exist"
-                else:
-                    quality = "🔴 LIMITED - Additional research recommended"
-
-                f.write(f"\n**Assessment:** {quality}\n")
-            except Exception as e:
-                logger.warning(f"Error calculating data quality: {e}")
-                f.write("**Overall Confidence Score:** N/A\n")
-                f.write("*Quality assessment unavailable*\n")
-
-            f.write("\n---\n\n")
-
-        except Exception as e:
-            logger.error(f"Error generating intelligence analysis section: {e}")
-            f.write("*Intelligence analysis section unavailable due to processing error*\n\n")
-            f.write("---\n\n")
-
-        # Discovered Emails
-        if discovered_emails:
-            f.write("## 📧 Discovered Emails\n\n")
-            for email in discovered_emails:
-                f.write(f"- {email}\n")
-            f.write("\n---\n\n")
-
-        # Username Variations
-        f.write("## 🔄 Username Variations\n\n")
-        f.write("*Potential usernames to search:*\n\n")
-        for username in username_variations[:15]:
-            f.write(f"- {username}\n")
-        f.write("\n---\n\n")
-
-        # Visualizations
-        if timeline_file or heatmap_file:
-            f.write("## 📊 Visualizations\n\n")
-            if timeline_file:
-                f.write(f"- **Timeline:** `{timeline_file}`\n")
-            if heatmap_file:
-                f.write(f"- **Activity Heatmap:** `{heatmap_file}`\n")
-            f.write("\n---\n\n")
-
-        # Footer
-        f.write("---\n\n")
-        f.write("*Generated by DeepTrace Advanced v3 - Intelligence-Enhanced OSINT*\n")
-        f.write("*Cost: $0.00 • Accuracy: 100% • Privacy: 100% Local*\n")
-
+        f.write(dossier_content)
     print(f"✅ Report saved: {report_file}\n")
 
     # =================================================================
