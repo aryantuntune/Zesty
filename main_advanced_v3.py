@@ -564,10 +564,38 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     print("\n✅ Enterprise analytics complete!\n")
 
     # =================================================================
+    # SAVE TO DATABASE (Before Report)
+    # =================================================================
+
+    print("="*70)
+    print("💾 SAVING INVESTIGATION")
+    print("="*70 + "\n")
+
+    # Extract interests from target profile
+    interests = []
+    if target_profile.get('interests'):
+        interests = target_profile['interests']
+    elif target_profile.get('occupation'):
+        interests = [target_profile['occupation']]
+
+    # Save investigation to database (need ID for report)
+    investigation_id = db.save_investigation(
+        target=target_name,
+        accounts=enriched_accounts,
+        predictions=username_variations if username_variations else [],
+        interests=interests,
+        high_confidence_count=len(confirmed_accounts),
+        report_path=None,  # Will update after report is generated
+        graph_path=timeline_file if timeline_file else heatmap_file
+    )
+
+    print(f"✅ Investigation saved to database (ID: {investigation_id})\n")
+
+    # =================================================================
     # GENERATE REPORT
     # =================================================================
 
-    print("\n" + "="*70)
+    print("="*70)
     print("📄 GENERATING REPORT")
     print("="*70 + "\n")
 
@@ -681,34 +709,6 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         f.write("*Cost: $0.00 • Accuracy: 100% • Privacy: 100% Local*\n")
 
     print(f"✅ Report saved: {report_file}\n")
-
-    # =================================================================
-    # SAVE TO DATABASE
-    # =================================================================
-
-    print("="*70)
-    print("💾 SAVING INVESTIGATION")
-    print("="*70 + "\n")
-
-    # Extract interests from target profile
-    interests = []
-    if target_profile.get('interests'):
-        interests = target_profile['interests']
-    elif target_profile.get('occupation'):
-        interests = [target_profile['occupation']]
-
-    # Save investigation to database
-    investigation_id = db.save_investigation(
-        target=target_name,
-        accounts=enriched_accounts,
-        predictions=username_variations if username_variations else [],
-        interests=interests,
-        high_confidence_count=len(confirmed_accounts),
-        report_path=report_file,
-        graph_path=timeline_file if timeline_file else heatmap_file
-    )
-
-    print(f"✅ Investigation saved to database (ID: {investigation_id})\n")
 
     # =================================================================
     # FINAL SUMMARY
