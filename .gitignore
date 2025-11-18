@@ -1,0 +1,51 @@
+# Environment
+.env
+*.env
+.venv/
+venv/
+ENV/
+
+# Credentials (NEVER COMMIT THESE!)
+.credentials.json
+data/sessions/
+
+# Data
+data/input/*
+data/raw_leads/*
+data/reports/*
+!data/input/.gitkeep
+!data/raw_leads/.gitkeep
+!data/reports/.gitkeep
+
+# Database and monitoring
+data/deeptrace.db
+data/deeptrace.db-journal
+data/monitors.json
+data/alerts.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+deeptrace.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright
+.playwright/

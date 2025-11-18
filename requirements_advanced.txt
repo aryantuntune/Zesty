@@ -1,0 +1,48 @@
+# DeepTrace Advanced - 100% FREE, NO API KEY REQUIRED
+# This requirements file has ZERO paid dependencies!
+
+# Core OSINT
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+tqdm>=4.66.0
+
+# OSINT tools
+sherlock-project>=0.14.3
+googlesearch-python>=1.2.3
+
+# Network analysis & visualization
+networkx>=3.2
+pyvis>=0.3.2
+
+# Advanced NLP features (100% offline)
+spacy>=3.7.0
+textblob>=0.17.1
+
+# Local AI - Hugging Face models (FREE, runs locally)
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.25.0  # For optimized model loading
+sentencepiece>=0.1.99  # For some tokenizers
+
+# Data visualization
+plotly>=5.18.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Monitoring and scheduling
+schedule>=1.2.0
+
+# Email verification
+dnspython>=2.4.0
+
+# Face recognition (optional - comment out if not needed)
+# face_recognition>=1.3.0
+
+# IMPORTANT: The following are ONLY needed for AI-powered modes (Basic, Enhanced, Professional)
+# They are NOT needed for Advanced or Independent modes!
+# Comment them out if you only use Advanced/Independent modes:
+
+# python-dotenv>=1.0.0          # Only for .env API key management
+# langchain-anthropic>=0.1.0    # Only for Claude AI (costs $$$)
+# browser-use>=0.1.0            # Only for AI browser automation
+# playwright>=1.40.0            # Only for AI browser automation
