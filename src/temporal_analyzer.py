@@ -99,8 +99,8 @@ class TemporalAnalyzer:
         """
         timestamps = []
 
-        # Check common fields
-        fields_to_check = ['created_at', 'posted_at', 'timestamp', 'date', 'published_at']
+        # Check common fields (added 'updated_at' and 'published' for our new scraper)
+        fields_to_check = ['created_at', 'posted_at', 'timestamp', 'date', 'published_at', 'updated_at', 'published']
 
         for field in fields_to_check:
             if field in content:

@@ -313,8 +313,20 @@ class EnhancedScraper:
     def _scrape_github(self, url: str, data: Dict) -> Dict:
         """Extract GitHub profile with repos, languages, and activity"""
         try:
-            username = url.rstrip('/').split('/')[-1]
-            if not username:
+            # Extract username from URL (handle both profile and repo URLs)
+            parts = url.rstrip('/').split('/')
+            # Profile URL: github.com/username
+            # Repo URL: github.com/username/repo
+            # Find github.com and take the next part as username
+            try:
+                github_idx = [i for i, p in enumerate(parts) if 'github.com' in p][0]
+                username = parts[github_idx + 1] if github_idx + 1 < len(parts) else None
+            except (IndexError, ValueError):
+                # Fallback to old method
+                username = parts[-1] if parts else None
+
+            if not username or username in ['', 'github.com']:
+                logger.warning(f"Could not extract username from URL: {url}")
                 return data
 
             # Get user profile

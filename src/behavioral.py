@@ -255,7 +255,11 @@ class BehavioralAnalyzer:
         image_count = 0
 
         for post in posts:
-            content = post.get('content', '')
+            # Extract content from multiple possible fields
+            content = (post.get('content', '') or
+                      post.get('description', '') or
+                      post.get('title', '') or
+                      post.get('text', ''))
             total_length += len(content)
 
             if 'http' in content:
@@ -386,11 +390,33 @@ class BehavioralAnalyzer:
             profile['interests'].update(self.extract_interests(bio))
             profile['writing_style'] = self.analyze_writing_style(bio)
 
-        # Extract from posts
+        # Extract from posts (handle multiple content field names)
         posts = account_data.get('posts', [])
         if posts:
-            all_content = ' '.join(p.get('content', '') for p in posts)
-            profile['interests'].update(self.extract_interests(all_content))
+            # Collect text from various possible fields
+            post_texts = []
+            for p in posts:
+                # Try multiple field names used by different platforms
+                text = (p.get('content', '') or
+                       p.get('description', '') or
+                       p.get('title', '') or
+                       p.get('text', ''))
+                if text:
+                    post_texts.append(text)
+
+                # Also extract topics/tags if available (GitHub repos)
+                if p.get('topics'):
+                    topics = p.get('topics', [])
+                    if isinstance(topics, list):
+                        post_texts.extend(topics)
+
+                # Extract language as interest (GitHub)
+                if p.get('language'):
+                    post_texts.append(p.get('language'))
+
+            all_content = ' '.join(post_texts)
+            if all_content:
+                profile['interests'].update(self.extract_interests(all_content))
             profile['activity_patterns'] = self.extract_activity_patterns(posts)
 
         # Convert set to list for JSON serialization
