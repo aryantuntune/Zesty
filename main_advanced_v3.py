@@ -35,6 +35,8 @@ from src.wayback import WaybackMachine
 from src.target_profiler import TargetProfiler  # NEW!
 from src.account_selector import AccountSelector
 from src.local_ai import LocalAI  # NEW!
+from src.url_verifier import URLVerifier  # NEW!
+from src.enhanced_scraper import EnhancedScraper  # NEW!
 from src.utils import setup_logger
 
 logger = setup_logger(__name__)
@@ -263,36 +265,72 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         return
 
     # =================================================================
-    # PHASE 3: PREVIEW SCRAPE
+    # PHASE 2.5: URL VERIFICATION (Reduces False Positives)
     # =================================================================
 
     print("\n" + "="*70)
-    print("🔍 PHASE 3: PREVIEW SCRAPE")
+    print("🔍 PHASE 2.5: URL VERIFICATION")
     print("="*70 + "\n")
 
-    print(f"📥 Quick scraping of top {min(30, len(all_leads))} leads (basic info only)...")
-    print("   This is FAST - just names, bios, locations\n")
+    print(f"🔎 Verifying {len(all_leads[:30])} URLs exist (filters 404s & dead links)...")
+    print("   This step eliminates false positives from Sherlock\n")
 
-    scraper = PlatformScraper()
+    url_verifier = URLVerifier(timeout=10, rate_limit=0.3)
+    verified_results = url_verifier.batch_verify(all_leads[:30], show_progress=True)
+
+    # Filter to only existing URLs
+    verified_leads = [url for url, result in verified_results.items() if result.get('exists', False)]
+
+    print(f"\n✅ URL Verification complete:")
+    print(f"   • Original leads: {len(all_leads[:30])}")
+    print(f"   • Verified existing: {len(verified_leads)}")
+    print(f"   • Filtered out: {len(all_leads[:30]) - len(verified_leads)} (404s, timeouts, etc.)")
+
+    if not verified_leads:
+        print("\n⚠️  No verified URLs found. Using unverified leads...")
+        verified_leads = all_leads[:30]
+
+    # =================================================================
+    # PHASE 3: PREVIEW SCRAPE (Enhanced Multi-Method Scraping)
+    # =================================================================
+
+    print("\n" + "="*70)
+    print("🔍 PHASE 3: ENHANCED PREVIEW SCRAPE")
+    print("="*70 + "\n")
+
+    print(f"📥 Smart scraping with 3 fallback methods (Selenium → Requests → APIs)...")
+    print("   Enhanced scraper tries multiple approaches for better data extraction\n")
+
+    scraper = EnhancedScraper()
     preview_accounts = []
 
     from tqdm import tqdm
-    for url in tqdm(all_leads[:30], desc="Preview scraping"):
+    for url in tqdm(verified_leads, desc="Enhanced scraping"):
         try:
-            result = scraper.auto_scrape(url)
+            # Use enhanced scraper with 3 fallback methods
+            result = scraper.scrape_with_fallbacks(url)
 
-            if result:
-                preview_accounts.append({
+            if result and result.get('url'):
+                account_data = {
                     'url': url,
                     'platform': result.get('platform', 'unknown'),
                     'name': result.get('name'),
                     'bio': result.get('bio'),
                     'location': result.get('location'),
                     'followers': result.get('followers'),
+                    'quality_score': result.get('quality_score', 0),  # From EnhancedScraper
                     'raw_result': result
-                })
+                }
+                preview_accounts.append(account_data)
+
+                # Log quality for debugging
+                quality = account_data['quality_score']
+                if quality >= 50:
+                    logger.debug(f"✅ High quality data for {url} (score: {quality})")
+                elif quality > 0:
+                    logger.debug(f"⚠️  Low quality data for {url} (score: {quality})")
         except Exception as e:
-            logger.debug(f"Preview scrape failed for {url}: {e}")
+            logger.debug(f"Enhanced scrape failed for {url}: {e}")
 
     print(f"\n✅ Preview complete: {len(preview_accounts)} accounts")
 
@@ -387,10 +425,10 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         # Use cached raw_result from preview
         result = account.get('raw_result', {})
 
-        # Additional deep scraping if needed
+        # Additional deep scraping if needed (uses EnhancedScraper)
         if not result.get('posts'):
             try:
-                deep_result = scraper.auto_scrape(account['url'])
+                deep_result = scraper.scrape_with_fallbacks(account['url'])
                 result.update(deep_result)
             except Exception as e:
                 logger.debug(f"Deep scrape failed: {e}")
