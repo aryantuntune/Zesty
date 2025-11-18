@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Local AI Engine - Hugging Face model for FREE AI reasoning
-Replaces expensive Anthropic API with local inference
+Local AI Engine - Hugging Face model for local AI reasoning
+Provides on-device inference for intelligent account verification
 """
 
 import os
@@ -23,7 +23,7 @@ logger = setup_logger(__name__)
 class LocalAI:
     """
     Local AI reasoning engine using Hugging Face models
-    Provides FREE AI capabilities without API costs
+    Provides on-device AI capabilities for account verification
     """
 
     def __init__(self, model_name: str = "microsoft/phi-2", cache_dir: str = "data/models"):
@@ -32,7 +32,7 @@ class LocalAI:
 
         Args:
             model_name: Hugging Face model identifier
-                - "microsoft/phi-2" (2.7B params, good reasoning, FREE)
+                - "microsoft/phi-2" (2.7B params, good reasoning)
                 - "TinyLlama/TinyLlama-1.1B-Chat-v1.0" (1.1B params, faster)
                 - "distilbert-base-uncased" (66M params, classification only)
             cache_dir: Directory to cache downloaded models

@@ -8,13 +8,10 @@ load_dotenv()
 class Config:
     """Configuration and environment setup for DeepTrace"""
 
-    # API Keys
-    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-
     # Ethical & Operational Settings
     ETHICAL_MODE = True      # Respects robots.txt and rate limits
     HEADLESS = False         # Set False to watch browser (demo mode)
-    MAX_LEADS = 5            # Limit leads to process (save API costs)
+    MAX_LEADS = 5            # Limit leads to process in preview mode
 
     # Paths
     BASE_DIR = Path(__file__).parent.parent
@@ -32,27 +29,12 @@ class Config:
     @classmethod
     def validate(cls):
         """Validates configuration and creates necessary directories"""
-        # Check API key
-        if not cls.ANTHROPIC_API_KEY:
-            raise ValueError(
-                "CRITICAL: ANTHROPIC_API_KEY not found in environment.\n"
-                "Create a .env file with: ANTHROPIC_API_KEY=sk-ant-..."
-            )
-
         # Create directories if they don't exist
         for directory in [cls.INPUT_DIR, cls.RAW_LEADS_DIR, cls.REPORTS_DIR]:
             directory.mkdir(parents=True, exist_ok=True)
 
         return True
 
-    @classmethod
-    def validate_independent(cls):
-        """Validates configuration without requiring API key (for independent mode)"""
-        # Create directories if they don't exist
-        for directory in [cls.INPUT_DIR, cls.RAW_LEADS_DIR, cls.REPORTS_DIR]:
-            directory.mkdir(parents=True, exist_ok=True)
-
-        return True
 
     @classmethod
     def get_target_image_path(cls):

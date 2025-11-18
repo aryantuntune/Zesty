@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-DeepTrace Advanced v3 - Intelligence-Enhanced Investigation
+DeepTrace - Professional OSINT Intelligence Platform
+Advanced v3 - Intelligence-Enhanced Investigation
+
+Core Capabilities:
 - Pre-investigation questionnaire for precision targeting
-- Local AI reasoning (Hugging Face models - FREE!)
+- Local AI reasoning for intelligent analysis
 - Interactive account verification
-- 11 enterprise features (Database, NLP, ML, Graph Theory, etc.)
-- 100% FREE - NO API KEY REQUIRED
+- Multi-layer intelligence analysis (NLP, Behavioral, Temporal, Graph Theory)
 """
 
 import os
@@ -44,38 +46,36 @@ logger = setup_logger(__name__)
 
 
 def print_banner():
-    """Display DeepTrace Advanced v3 banner"""
+    """Display DeepTrace banner"""
     banner = """
-╔════════════════════════════════════════════════════════════════════╗
-║                                                                    ║
-║         ██████╗ ███████╗███████╗██████╗ ████████╗██████╗  █████╗  ║
-║         ██╔══██╗██╔════╝██╔════╝██╔══██╗╚══██╔══╝██╔══██╗██╔══██╗ ║
-║         ██║  ██║█████╗  █████╗  ██████╔╝   ██║   ██████╔╝███████║ ║
-║         ██║  ██║██╔══╝  ██╔══╝  ██╔═══╝    ██║   ██╔══██╗██╔══██║ ║
-║         ██████╔╝███████╗███████╗██║        ██║   ██║  ██║██║  ██║ ║
-║         ╚═════╝ ╚══════╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ║
-║                                                                    ║
-║              Advanced v3 - Intelligence-Enhanced OSINT             ║
-║                     100% FREE • NO API KEY                         ║
-║                                                                    ║
-╚════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════╗
+║                                                                      ║
+║     ██████╗ ███████╗███████╗██████╗ ████████╗██████╗  █████╗  ██████╗███████╗
+║     ██╔══██╗██╔════╝██╔════╝██╔══██╗╚══██╔══╝██╔══██╗██╔══██╗██╔════╝██╔════╝
+║     ██║  ██║█████╗  █████╗  ██████╔╝   ██║   ██████╔╝███████║██║     █████╗
+║     ██║  ██║██╔══╝  ██╔══╝  ██╔═══╝    ██║   ██╔══██╗██╔══██║██║     ██╔══╝
+║     ██████╔╝███████╗███████╗██║        ██║   ██║  ██║██║  ██║╚██████╗███████╗
+║     ╚═════╝ ╚══════╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝
+║                                                                      ║
+║                Professional OSINT Intelligence Platform              ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
 
-🎯 WHAT'S NEW IN V3:
-   • Pre-investigation questionnaire (precision targeting!)
-   • Local AI reasoning (Hugging Face - FREE!)
-   • Interactive account verification
-   • 11 enterprise features
-   • 100% accurate results (no false positives)
+🎯 INVESTIGATION WORKFLOW:
+   Phase 1: Target Profiling - Intelligence questionnaire
+   Phase 2: Reconnaissance - Multi-source discovery
+   Phase 3: Data Collection - Enhanced scraping with fallbacks
+   Phase 4: Verification - AI-powered validation
+   Phase 5: Deep Analysis - Comprehensive intelligence gathering
+   Phase 6: Intelligence Fusion - Multi-layer analytics
+   Phase 7: Report Generation - TLP-classified dossier
 
-💡 HOW IT WORKS:
-   Phase 1: Answer questions about target (builds intel profile)
-   Phase 2: Reconnaissance (Sherlock + Google Dorks)
-   Phase 3: Preview Scrape (quick metadata gathering)
-   Phase 4: AI-Powered Account Verification (filters false positives)
-   Phase 5: Deep Analysis (only confirmed accounts)
-   Phase 6: Enterprise Analytics (NLP, ML, Graph Theory, etc.)
-
-⚡ COST: $0.00 (vs $0.15 with Anthropic API)
+🧠 INTELLIGENCE CAPABILITIES:
+   • Behavioral Analysis - Interest profiling, pattern detection
+   • Temporal Analysis - Activity patterns, timezone estimation
+   • Network Analysis - Platform relationships, connection mapping
+   • NLP Analysis - Entity extraction, skill identification
+   • Threat Assessment - Risk scoring, vulnerability analysis
 
 """
     print(banner)
@@ -100,7 +100,6 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         print("="*70)
         print("\n🔧 Setting up local AI reasoning...")
         print("   Model: microsoft/phi-2 (2.7B parameters)")
-        print("   Cost: $0.00 (runs on your machine)")
         print("   First run: Downloads ~5GB model (one-time)")
         print("   Subsequent runs: Uses cached model (instant)")
 
@@ -698,7 +697,6 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     print(f"   • Platforms: {len(set(acc.get('platform') for acc in confirmed_accounts))}")
     print(f"   • Emails discovered: {len(discovered_emails)}")
     print(f"   • Accuracy: 100% (user-verified)")
-    print(f"   • Cost: $0.00")
     print(f"   • AI: {'Enabled' if ai_engine else 'Disabled (rule-based)'}")
 
     print(f"\n📁 Files:")
