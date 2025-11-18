@@ -61,17 +61,19 @@ class DomainTransform(BaseTransform):
     - Related domain discovery
     """
 
-    def __init__(self, securitytrails_api_key: Optional[str] = None, shodan_api_key: Optional[str] = None):
+    def __init__(self, securitytrails_api_key: Optional[str] = None, shodan_api_key: Optional[str] = None, whoisxml_api_key: Optional[str] = None):
         """
         Initialize domain transform.
 
         Args:
             securitytrails_api_key: SecurityTrails API key (optional)
             shodan_api_key: Shodan API key (optional)
+            whoisxml_api_key: WhoisXML API key (optional, for WHOIS history)
         """
         super().__init__(rate_limit=60)
         self.securitytrails_api_key = securitytrails_api_key
         self.shodan_api_key = shodan_api_key
+        self.whoisxml_api_key = whoisxml_api_key
 
         # Configure DNS resolver
         self.dns_resolver = dns.resolver.Resolver()
@@ -87,7 +89,8 @@ class DomainTransform(BaseTransform):
 
         logger.info(
             f"DomainTransform initialized (SecurityTrails: {'✓' if securitytrails_api_key else '✗'}, "
-            f"Shodan: {'✓' if shodan_api_key else '✗'})"
+            f"Shodan: {'✓' if shodan_api_key else '✗'}, "
+            f"WhoisXML: {'✓' if whoisxml_api_key else '✗'})"
         )
 
     def can_handle(self, selector: Selector) -> bool:
@@ -270,6 +273,98 @@ class DomainTransform(BaseTransform):
                 result.api_calls_made += 1
                 if passive_dns:
                     result.metadata['passive_dns'] = passive_dns
+
+            # Step 6: Historical Passive DNS (SecurityTrails history)
+            if self.securitytrails_api_key:
+                historical_dns = self._query_historical_dns(domain)
+                result.api_calls_made += 1
+                if historical_dns:
+                    result.metadata['historical_dns'] = historical_dns
+
+                    # Extract historical IPs as selectors
+                    for record in historical_dns.get('a_records', []):
+                        for ip_entry in record.get('values', []):
+                            ip_value = ip_entry.get('ip')
+                            if ip_value:
+                                ip_selector = Selector(
+                                    type=SelectorType.IP_ADDRESS,
+                                    value=ip_value,
+                                    source=f"historical_dns:{domain}",
+                                    context={
+                                        'domain': domain,
+                                        'first_seen': record.get('first_seen'),
+                                        'last_seen': record.get('last_seen'),
+                                        'historical': True
+                                    }
+                                )
+                                result.discovered_entities.append(DiscoveredEntity(
+                                    selector=ip_selector,
+                                    reliability=Reliability.CONFIRMED,
+                                    source="historical_passive_dns",
+                                    confidence=95,
+                                    metadata={
+                                        'first_seen': record.get('first_seen'),
+                                        'last_seen': record.get('last_seen'),
+                                        'type': 'historical_ip'
+                                    }
+                                ))
+
+            # Step 7: Historical WHOIS (find pre-privacy registrant data)
+            if self.whoisxml_api_key:
+                whois_history = self._query_whois_history(domain)
+                result.api_calls_made += 1
+                if whois_history:
+                    result.metadata['whois_history'] = whois_history
+
+                    # Extract historical registrant information
+                    for historical_record in whois_history.get('records', []):
+                        # Extract registrant name (if not privacy-protected)
+                        registrant_name = historical_record.get('registrant_name')
+                        if registrant_name and 'privacy' not in registrant_name.lower() and 'redacted' not in registrant_name.lower():
+                            name_selector = Selector(
+                                type=SelectorType.NAME,
+                                value=registrant_name,
+                                source=f"whois_history:{domain}",
+                                context={
+                                    'domain': domain,
+                                    'date': historical_record.get('date'),
+                                    'historical': True
+                                }
+                            )
+                            result.discovered_entities.append(DiscoveredEntity(
+                                selector=name_selector,
+                                reliability=Reliability.CONFIRMED,
+                                source="whois_history",
+                                confidence=90,
+                                metadata={
+                                    'historical_date': historical_record.get('date'),
+                                    'type': 'historical_registrant'
+                                }
+                            ))
+
+                        # Extract historical registrant email
+                        registrant_email = historical_record.get('registrant_email')
+                        if registrant_email and '@' in registrant_email:
+                            email_selector = Selector(
+                                type=SelectorType.EMAIL,
+                                value=registrant_email,
+                                source=f"whois_history:{domain}",
+                                context={
+                                    'domain': domain,
+                                    'date': historical_record.get('date'),
+                                    'historical': True
+                                }
+                            )
+                            result.discovered_entities.append(DiscoveredEntity(
+                                selector=email_selector,
+                                reliability=Reliability.CONFIRMED,
+                                source="whois_history",
+                                confidence=95,
+                                metadata={
+                                    'historical_date': historical_record.get('date'),
+                                    'role': 'historical_domain_registrant'
+                                }
+                            ))
 
             result.success = True
             result.metadata['total_discoveries'] = len(result.discovered_entities)
@@ -490,4 +585,181 @@ class DomainTransform(BaseTransform):
 
         except Exception as e:
             logger.error(f"SecurityTrails query failed: {e}")
+            return None
+
+    def _query_historical_dns(self, domain: str) -> Optional[Dict[str, any]]:
+        """
+        Query SecurityTrails Historical Passive DNS records.
+
+        Professional OSINT Use Case:
+        - Infrastructure migration tracking (what IPs did this domain point to in 2018, 2019, 2020?)
+        - Hosting provider changes (GoDaddy → AWS → Cloudflare)
+        - Identify previous infrastructure that may still be active
+        - Find abandoned infrastructure that reveals tech stack history
+        - Attribution: If attacker moved from shared hosting to VPS, indicates sophistication
+
+        API Endpoint: /v1/history/{domain}/dns/{record_type}
+        Record types: a, aaaa, mx, ns, txt, soa
+
+        Args:
+            domain: Domain to query historical records for
+
+        Returns:
+            Dictionary with historical DNS records by type
+        """
+        if not self.securitytrails_api_key:
+            return None
+
+        historical_data = {}
+
+        try:
+            # Query historical A records (most important for IP pivoting)
+            url = f"https://api.securitytrails.com/v1/history/{domain}/dns/a"
+            headers = {
+                'APIKEY': self.securitytrails_api_key,
+                'Accept': 'application/json'
+            }
+
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                historical_data['a_records'] = data.get('records', [])
+                logger.info(f"Historical DNS: {domain} → {len(data.get('records', []))} A record changes")
+
+            # Query historical MX records
+            url_mx = f"https://api.securitytrails.com/v1/history/{domain}/dns/mx"
+            response_mx = requests.get(url_mx, headers=headers, timeout=10)
+
+            if response_mx.status_code == 200:
+                data_mx = response_mx.json()
+                historical_data['mx_records'] = data_mx.get('records', [])
+
+            # Query historical NS records
+            url_ns = f"https://api.securitytrails.com/v1/history/{domain}/dns/ns"
+            response_ns = requests.get(url_ns, headers=headers, timeout=10)
+
+            if response_ns.status_code == 200:
+                data_ns = response_ns.json()
+                historical_data['ns_records'] = data_ns.get('records', [])
+
+            if historical_data:
+                logger.info(f"Historical Passive DNS complete for {domain}")
+                return historical_data
+            else:
+                return None
+
+        except Exception as e:
+            logger.error(f"Historical DNS query failed for {domain}: {e}")
+            return None
+
+    def _query_whois_history(self, domain: str) -> Optional[Dict[str, any]]:
+        """
+        Query historical WHOIS records to find pre-privacy registrant data.
+
+        Professional OSINT Use Case:
+        - Many domains now use WHOIS privacy protection
+        - But historical WHOIS records (from years ago) may contain real registrant info
+        - Example: example.com registered in 2010 with "John Doe, john@email.com"
+        - In 2015, privacy protection enabled → current WHOIS shows "REDACTED"
+        - Historical WHOIS reveals original owner
+        - Attribution: Link domain to real person/organization
+
+        This is GOLD for OSINT - bypasses current privacy protection by looking at history.
+
+        API Options:
+        - WhoisXMLAPI (paid, but has historical WHOIS)
+        - DomainTools (enterprise, very expensive)
+        - Free alternative: Wayback Machine WHOIS snapshots (manual parsing)
+
+        Args:
+            domain: Domain to query
+
+        Returns:
+            Dictionary with historical WHOIS records
+        """
+        if not self.whoisxml_api_key:
+            # Try free alternative: Wayback Machine
+            return self._query_wayback_whois(domain)
+
+        try:
+            url = "https://www.whoisxmlapi.com/whoisserver/WhoisService"
+            params = {
+                'apiKey': self.whoisxml_api_key,
+                'domainName': domain,
+                'outputFormat': 'JSON',
+                'mode': 'history'  # Historical mode
+            }
+
+            response = requests.get(url, params=params, timeout=15)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                # Parse historical records
+                historical_records = []
+                whois_records = data.get('WhoisRecord', {}).get('audit', [])
+
+                for record in whois_records:
+                    registrant = record.get('registrant', {})
+                    parsed_record = {
+                        'date': record.get('auditUpdatedDate'),
+                        'registrant_name': registrant.get('name'),
+                        'registrant_email': registrant.get('email'),
+                        'registrant_org': registrant.get('organization'),
+                        'registrar': record.get('registrarName')
+                    }
+                    historical_records.append(parsed_record)
+
+                if historical_records:
+                    logger.info(f"WHOIS History: {domain} → {len(historical_records)} historical records found")
+                    return {'records': historical_records}
+                else:
+                    return None
+
+        except Exception as e:
+            logger.error(f"WHOIS history query failed for {domain}: {e}")
+            return None
+
+    def _query_wayback_whois(self, domain: str) -> Optional[Dict[str, any]]:
+        """
+        Free alternative: Query Wayback Machine for historical WHOIS snapshots.
+
+        The Internet Archive sometimes captures WHOIS records in their snapshots.
+        This is less reliable than WhoisXMLAPI but free.
+
+        Args:
+            domain: Domain to query
+
+        Returns:
+            Dictionary with historical WHOIS data (if found)
+        """
+        try:
+            # Query Wayback Machine CDX API for WHOIS captures
+            url = f"http://web.archive.org/cdx/search/cdx"
+            params = {
+                'url': f'whois.domaintools.com/{domain}',
+                'output': 'json',
+                'limit': 5
+            }
+
+            response = requests.get(url, params=params, timeout=10)
+
+            if response.status_code == 200:
+                snapshots = response.json()
+
+                if len(snapshots) > 1:  # First row is headers
+                    logger.info(f"Wayback WHOIS: Found {len(snapshots)-1} snapshots for {domain}")
+                    # Note: Would need to fetch and parse each snapshot
+                    # For now, just return metadata
+                    return {
+                        'records': [],
+                        'wayback_snapshots': len(snapshots) - 1,
+                        'note': 'Historical WHOIS available via Wayback Machine (requires manual inspection)'
+                    }
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"Wayback WHOIS query failed: {e}")
             return None

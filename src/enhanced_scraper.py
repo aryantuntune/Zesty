@@ -355,6 +355,13 @@ class EnhancedScraper:
                     languages = set()
 
                     for repo in repos[:10]:  # Limit to 10 most recent
+                        # Scan repository for tech stack and dependencies
+                        tech_stack, dependencies, threat_keywords = self._scan_repo_tech_stack(
+                            username,
+                            repo.get('name'),
+                            repo.get('default_branch', 'main')
+                        )
+
                         post = {
                             'type': 'repository',
                             'title': repo.get('name'),
@@ -364,7 +371,10 @@ class EnhancedScraper:
                             'forks': repo.get('forks_count', 0),
                             'created_at': repo.get('created_at'),
                             'updated_at': repo.get('updated_at'),
-                            'topics': repo.get('topics', [])
+                            'topics': repo.get('topics', []),
+                            'tech_stack': tech_stack,
+                            'dependencies': dependencies,
+                            'threat_keywords': threat_keywords
                         }
                         posts.append(post)
 
@@ -383,6 +393,194 @@ class EnhancedScraper:
             logger.debug(f"GitHub extraction failed: {e}")
 
         return data
+
+    def _scan_repo_tech_stack(self, username: str, repo_name: str, branch: str = 'main') -> tuple:
+        """
+        Deep scan of GitHub repository for tech stack, dependencies, and threat keywords.
+
+        Professional OSINT Intelligence Value:
+        - Tech stack reveals subject's expertise (AWS → cloud engineer, TensorFlow → ML researcher)
+        - Dependencies show third-party integrations (Stripe → payment processing, Twilio → SMS)
+        - Threat keywords indicate security research vs malicious activity
+        - Version numbers reveal patching habits (outdated Django 1.11 → poor security hygiene)
+
+        Scans for:
+        1. Dependency files: requirements.txt, package.json, Gemfile, go.mod, Dockerfile
+        2. Tech stack indicators: AWS, GCP, Azure, PostgreSQL, Redis, etc.
+        3. Threat actor keywords: RDP, VNC, Admin, Credential, 0-day, Exploit
+
+        Args:
+            username: GitHub username
+            repo_name: Repository name
+            branch: Branch name (default: main)
+
+        Returns:
+            Tuple of (tech_stack, dependencies, threat_keywords)
+        """
+        tech_stack = []
+        dependencies = []
+        threat_keywords = []
+
+        try:
+            # Common dependency files to check
+            dependency_files = [
+                'requirements.txt',  # Python
+                'package.json',      # Node.js
+                'Gemfile',           # Ruby
+                'go.mod',            # Go
+                'pom.xml',           # Java Maven
+                'build.gradle',      # Java Gradle
+                'Cargo.toml',        # Rust
+                'composer.json',     # PHP
+                'Dockerfile',        # Docker
+                'docker-compose.yml' # Docker Compose
+            ]
+
+            # Tech stack keywords to search for
+            tech_keywords = {
+                # Cloud providers
+                'aws': ['aws', 'boto3', 's3', 'ec2', 'lambda'],
+                'gcp': ['google-cloud', 'gcp', 'bigquery'],
+                'azure': ['azure', 'microsoft-azure'],
+
+                # Databases
+                'postgresql': ['postgres', 'psycopg2'],
+                'mysql': ['mysql', 'pymysql'],
+                'mongodb': ['mongo', 'pymongo'],
+                'redis': ['redis', 'redis-py'],
+
+                # Web frameworks
+                'django': ['django'],
+                'flask': ['flask'],
+                'express': ['express'],
+                'react': ['react'],
+                'vue': ['vue'],
+                'angular': ['angular'],
+
+                # Security/Auth
+                'jwt': ['jwt', 'pyjwt', 'jsonwebtoken'],
+                'oauth': ['oauth', 'oauthlib'],
+
+                # APIs/Integration
+                'stripe': ['stripe'],
+                'twilio': ['twilio'],
+                'sendgrid': ['sendgrid']
+            }
+
+            # Threat actor keywords (offensive security indicators)
+            threat_patterns = [
+                'rdp', 'remote desktop', 'vnc',
+                'admin', 'administrator',
+                'credential', 'password', 'passwd',
+                '0-day', 'zero-day', 'exploit',
+                'backdoor', 'rootkit', 'trojan',
+                'keylog', 'rat ', 'c2', 'command and control',
+                'bruteforce', 'brute-force',
+                'mimikatz', 'metasploit', 'cobaltstrike'
+            ]
+
+            # Scan each dependency file
+            for dep_file in dependency_files:
+                try:
+                    # Get file content from GitHub API
+                    file_url = f'https://api.github.com/repos/{username}/{repo_name}/contents/{dep_file}?ref={branch}'
+                    response = self.session.get(file_url, timeout=5)
+
+                    if response.status_code == 200:
+                        file_data = response.json()
+
+                        # Get file content (base64 encoded)
+                        if file_data.get('encoding') == 'base64':
+                            import base64
+                            content = base64.b64decode(file_data['content']).decode('utf-8', errors='ignore')
+
+                            # Parse dependencies based on file type
+                            if dep_file == 'requirements.txt':
+                                deps = self._parse_requirements_txt(content)
+                                dependencies.extend(deps)
+                            elif dep_file == 'package.json':
+                                deps = self._parse_package_json(content)
+                                dependencies.extend(deps)
+                            elif dep_file == 'Dockerfile':
+                                tech_stack.append('Docker')
+
+                            # Search for tech stack keywords
+                            content_lower = content.lower()
+                            for tech, keywords in tech_keywords.items():
+                                if any(kw in content_lower for kw in keywords):
+                                    if tech not in tech_stack:
+                                        tech_stack.append(tech)
+
+                            # Search for threat keywords
+                            for threat_kw in threat_patterns:
+                                if threat_kw.lower() in content_lower:
+                                    if threat_kw not in threat_keywords:
+                                        threat_keywords.append(threat_kw)
+
+                except Exception as e:
+                    logger.debug(f"Failed to scan {dep_file} in {username}/{repo_name}: {e}")
+                    continue
+
+            # Also scan README.md for tech stack mentions
+            try:
+                readme_url = f'https://api.github.com/repos/{username}/{repo_name}/readme'
+                response = self.session.get(readme_url, timeout=5)
+
+                if response.status_code == 200:
+                    readme_data = response.json()
+                    if readme_data.get('encoding') == 'base64':
+                        import base64
+                        readme_content = base64.b64decode(readme_data['content']).decode('utf-8', errors='ignore')
+                        readme_lower = readme_content.lower()
+
+                        # Search for tech mentions in README
+                        for tech, keywords in tech_keywords.items():
+                            if any(kw in readme_lower for kw in keywords):
+                                if tech not in tech_stack:
+                                    tech_stack.append(tech)
+
+                        # Search for threat keywords in README
+                        for threat_kw in threat_patterns:
+                            if threat_kw.lower() in readme_lower:
+                                if threat_kw not in threat_keywords:
+                                    threat_keywords.append(threat_kw)
+
+            except Exception as e:
+                logger.debug(f"Failed to scan README in {username}/{repo_name}: {e}")
+
+        except Exception as e:
+            logger.debug(f"Tech stack scan failed for {username}/{repo_name}: {e}")
+
+        return tech_stack, dependencies, threat_keywords
+
+    def _parse_requirements_txt(self, content: str) -> List[str]:
+        """Parse Python requirements.txt file"""
+        dependencies = []
+        for line in content.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#'):
+                # Extract package name (before ==, >=, etc.)
+                pkg = re.split(r'[=><]', line)[0].strip()
+                if pkg:
+                    dependencies.append(pkg)
+        return dependencies
+
+    def _parse_package_json(self, content: str) -> List[str]:
+        """Parse Node.js package.json file"""
+        dependencies = []
+        try:
+            import json
+            data = json.loads(content)
+
+            # Extract from dependencies and devDependencies
+            for dep_section in ['dependencies', 'devDependencies']:
+                if dep_section in data:
+                    dependencies.extend(data[dep_section].keys())
+
+        except Exception as e:
+            logger.debug(f"Failed to parse package.json: {e}")
+
+        return dependencies
 
     def _scrape_youtube(self, url: str, data: Dict) -> Dict:
         """Extract YouTube channel info with videos"""

@@ -18,6 +18,7 @@ from typing import List, Dict, Tuple
 from datetime import datetime, timedelta
 from collections import defaultdict
 import re
+import requests
 
 from .utils import setup_logger
 
@@ -77,6 +78,9 @@ class AdverseInferenceEngine:
         # Detect general anomalies
         results['anomalies'] = self._detect_anomalies(accounts)
 
+        # Apply elimination logic to refine inferences
+        results = self._apply_elimination_logic(results, accounts, target_profile)
+
         # Calculate overall risk score
         results['risk_score'] = self._calculate_risk_score(results)
 
@@ -127,16 +131,45 @@ class AdverseInferenceEngine:
             for i in range(len(sorted_dates) - 1):
                 gap = sorted_dates[i + 1] - sorted_dates[i]
                 if gap > 2:
-                    gaps.append({
+                    # Verify gap with Wayback Machine
+                    wayback_verification = self._verify_gap_with_wayback(
+                        accounts,
+                        sorted_dates[i],
+                        sorted_dates[i + 1]
+                    )
+
+                    gap_entry = {
                         'type': 'multi_year_gap',
                         'start_year': sorted_dates[i],
                         'end_year': sorted_dates[i + 1],
                         'gap_years': gap,
                         'severity': 'HIGH' if gap > 5 else 'MEDIUM',
-                        'inference': f"{gap}-year gap in online activity. Possible causes: "
-                                   f"incarceration, military deployment, witness protection, "
-                                   f"deliberate profile dormancy, or identity change."
-                    })
+                        'wayback_verification': wayback_verification,
+                        'inference': f"{gap}-year gap in online activity. "
+                    }
+
+                    # Enhanced inference based on Wayback verification
+                    if wayback_verification.get('verified'):
+                        if wayback_verification.get('profile_existed_during_gap'):
+                            gap_entry['inference'] += (
+                                f"Wayback Machine shows profile EXISTED during gap but was later DELETED. "
+                                f"This indicates deliberate profile scrubbing or content removal. "
+                                f"Snapshots found: {wayback_verification.get('snapshots_found', 0)}"
+                            )
+                            gap_entry['severity'] = 'CRITICAL'  # Deliberate scrubbing is very suspicious
+                        else:
+                            gap_entry['inference'] += (
+                                f"Wayback Machine shows profile did NOT exist during gap (404 errors). "
+                                f"This confirms genuine inactivity, not scrubbing. Possible causes: "
+                                f"incarceration, military deployment, witness protection, or account not created yet."
+                            )
+                    else:
+                        gap_entry['inference'] += (
+                            f"Possible causes: incarceration, military deployment, witness protection, "
+                            f"deliberate profile dormancy, or identity change."
+                        )
+
+                    gaps.append(gap_entry)
 
         # Check for recent dormancy
         if creation_dates:
@@ -357,12 +390,257 @@ class AdverseInferenceEngine:
 
         return anomalies
 
+    def _apply_elimination_logic(self, results: Dict, accounts: List[Dict], target_profile: Dict = None) -> Dict:
+        """
+        Apply deductive elimination logic to refine inferences.
+
+        Professional Intelligence Analysis:
+        Instead of just flagging suspicious patterns, apply logical reasoning to:
+        1. Eliminate impossible scenarios
+        2. Reduce probability of unlikely scenarios
+        3. Add alternative explanations based on evidence
+
+        Elimination Rules:
+        - IF tech_platform_clustering AND temporal_gap THEN infer(graduate_school_or_bootcamp)
+        - IF location_privacy AND opsec_keywords THEN increase_probability(security_professional)
+        - IF minimal_profiles AND all_created_same_year THEN increase_probability(sock_puppets)
+        - IF temporal_gap AND conference_activity THEN infer(career_transition)
+
+        This is the "Sherlock Holmes" phase: "Once you eliminate the impossible,
+        whatever remains, however improbable, must be the truth."
+
+        Args:
+            results: Current adverse inference results
+            accounts: List of account dictionaries
+            target_profile: Optional target profile data
+
+        Returns:
+            Updated results with elimination logic applied
+        """
+        results['elimination_analysis'] = []
+
+        # Rule 1: Tech platform clustering + temporal gap → Graduate school/bootcamp
+        tech_cluster = None
+        for anomaly in results['anomalies']:
+            if anomaly.get('type') == 'tech_platform_clustering':
+                tech_cluster = anomaly
+                break
+
+        if tech_cluster:
+            for gap in results['temporal_gaps']:
+                gap_years = gap.get('gap_years', 0)
+                if 2 <= gap_years <= 4:  # Graduate school is typically 2-4 years
+                    results['elimination_analysis'].append({
+                        'rule': 'tech_cluster_with_gap',
+                        'finding': f"{gap_years}-year gap with {tech_cluster.get('tech_platform_count')} tech platforms",
+                        'inference': f"Gap likely due to graduate school or coding bootcamp. "
+                                   f"Subject transitioned into tech field after {gap.get('end_year')}.",
+                        'probability': 0.7,
+                        'impact': 'LOW',
+                        'eliminates': ['incarceration', 'witness_protection']
+                    })
+
+        # Rule 2: Location privacy + OpSec keywords → Security professional
+        location_privacy = None
+        opsec_keywords = False
+
+        for indicator in results['opsec_indicators']:
+            if indicator.get('type') == 'location_privacy':
+                location_privacy = indicator
+            elif indicator.get('type') == 'privacy_usernames':
+                opsec_keywords = True
+
+        if location_privacy and opsec_keywords:
+            results['elimination_analysis'].append({
+                'rule': 'opsec_aware_professional',
+                'finding': 'Location privacy + privacy-focused usernames',
+                'inference': 'Subject demonstrates professional OpSec awareness. '
+                           'Likely works in cybersecurity, privacy advocacy, or sensitive field. '
+                           'This is good security hygiene, not necessarily malicious.',
+                'probability': 0.6,
+                'impact': 'LOW',
+                'eliminates': ['unsophisticated_threat']
+            })
+
+        # Rule 3: Minimal profiles + same creation year → Sock puppets
+        minimal_profile_indicator = None
+        for indicator in results['scrubbing_indicators']:
+            if indicator.get('type') == 'mass_minimal_profiles':
+                minimal_profile_indicator = indicator
+                break
+
+        if minimal_profile_indicator:
+            # Check if accounts were created in same year
+            creation_years = []
+            for acc in accounts:
+                if acc and acc.get('created_at'):
+                    # Extract year from created_at
+                    created_at = str(acc['created_at'])
+                    year_match = re.search(r'(20\d{2})', created_at)
+                    if year_match:
+                        creation_years.append(int(year_match.group(1)))
+
+            if len(set(creation_years)) == 1 and len(creation_years) >= 3:
+                results['elimination_analysis'].append({
+                    'rule': 'minimal_profiles_same_year',
+                    'finding': f"{len(creation_years)} minimal profiles created in {creation_years[0]}",
+                    'inference': 'High probability of coordinated account creation. '
+                               'Suggests sock puppets, bot network, or deliberate identity establishment.',
+                    'probability': 0.8,
+                    'impact': 'MEDIUM',
+                    'eliminates': ['organic_growth']
+                })
+
+        # Rule 4: Post count outlier → Primary account identification
+        primary_account = None
+        for anomaly in results['anomalies']:
+            if anomaly.get('type') == 'post_count_outlier':
+                max_posts = anomaly.get('max_posts', 0)
+                if max_posts > 50:
+                    # Find which account has this many posts
+                    for acc in accounts:
+                        if acc and len(acc.get('posts', [])) == max_posts:
+                            primary_account = acc.get('platform', 'unknown')
+                            break
+
+                    if primary_account:
+                        results['elimination_analysis'].append({
+                            'rule': 'primary_account_identified',
+                            'finding': f"{primary_account} has {max_posts} posts vs average {anomaly.get('avg_posts', 0):.0f}",
+                            'inference': f"{primary_account} is subject's primary platform. "
+                                       f"Focus investigation here for most detailed intelligence.",
+                            'probability': 0.9,
+                            'impact': 'LOW',
+                            'recommendation': f"Prioritize deep analysis of {primary_account} account"
+                        })
+
+        # Rule 5: Wayback verification eliminates scrubbing vs inactivity
+        for gap in results['temporal_gaps']:
+            wayback = gap.get('wayback_verification', {})
+            if wayback.get('verified'):
+                if not wayback.get('profile_existed_during_gap'):
+                    results['elimination_analysis'].append({
+                        'rule': 'wayback_confirms_inactivity',
+                        'finding': f"Wayback Machine shows 404 errors during {gap.get('start_year')}-{gap.get('end_year')}",
+                        'inference': 'Profile scrubbing hypothesis ELIMINATED. '
+                                   'Subject genuinely was not active on platform during this period.',
+                        'probability': 1.0,
+                        'impact': 'LOW',
+                        'eliminates': ['profile_scrubbing', 'content_deletion']
+                    })
+
+        # Rule 6: Tech stack indicates professional role
+        all_tech_stacks = []
+        for acc in accounts:
+            if acc and acc.get('posts'):
+                for post in acc['posts']:
+                    if post.get('tech_stack'):
+                        all_tech_stacks.extend(post['tech_stack'])
+
+        if all_tech_stacks:
+            unique_tech = set(all_tech_stacks)
+
+            # Cloud engineer pattern
+            cloud_techs = {'aws', 'gcp', 'azure'}
+            if cloud_techs & unique_tech:
+                results['elimination_analysis'].append({
+                    'rule': 'cloud_engineer_pattern',
+                    'finding': f"Cloud technologies detected: {', '.join(cloud_techs & unique_tech)}",
+                    'inference': 'Subject works with cloud infrastructure. '
+                               'Likely role: Cloud Engineer, DevOps, SRE, or Solutions Architect.',
+                    'probability': 0.8,
+                    'impact': 'LOW',
+                    'professional_role': 'cloud_infrastructure'
+                })
+
+            # Database specialist pattern
+            db_techs = {'postgresql', 'mysql', 'mongodb', 'redis'}
+            if len(db_techs & unique_tech) >= 2:
+                results['elimination_analysis'].append({
+                    'rule': 'database_specialist_pattern',
+                    'finding': f"Multiple database technologies: {', '.join(db_techs & unique_tech)}",
+                    'inference': 'Subject has database expertise. '
+                               'Likely role: Database Administrator, Backend Engineer, or Data Engineer.',
+                    'probability': 0.7,
+                    'impact': 'LOW',
+                    'professional_role': 'database_specialist'
+                })
+
+        # Rule 7: Threat keywords indicate security research vs malicious
+        all_threat_keywords = []
+        for acc in accounts:
+            if acc and acc.get('posts'):
+                for post in acc['posts']:
+                    if post.get('threat_keywords'):
+                        all_threat_keywords.extend(post['threat_keywords'])
+
+        if all_threat_keywords:
+            # Check for educational/research context
+            has_educational_context = False
+            for acc in accounts:
+                bio = acc.get('bio', '').lower() if acc else ''
+                if any(kw in bio for kw in ['security researcher', 'pentester', 'bug bounty', 'ctf', 'educator', 'professor']):
+                    has_educational_context = True
+                    break
+
+            if has_educational_context:
+                results['elimination_analysis'].append({
+                    'rule': 'threat_keywords_with_context',
+                    'finding': f"Threat keywords detected ({len(set(all_threat_keywords))}) with security research context",
+                    'inference': 'Threat keywords appear in legitimate security research context. '
+                               'Subject likely works in offensive security, penetration testing, or security education. '
+                               'MALICIOUS INTENT hypothesis REDUCED.',
+                    'probability': 0.9,
+                    'impact': 'LOW',
+                    'eliminates': ['malicious_actor'],
+                    'professional_role': 'security_researcher'
+                })
+            else:
+                results['elimination_analysis'].append({
+                    'rule': 'threat_keywords_without_context',
+                    'finding': f"Threat keywords detected ({len(set(all_threat_keywords))}) WITHOUT clear research context",
+                    'inference': 'Threat keywords present but no clear security research affiliation. '
+                               'Could indicate: (1) Private security researcher, (2) Hobbyist hacker, '
+                               '(3) Threat actor, or (4) CTF participant. REQUIRES HUMAN REVIEW.',
+                    'probability': 0.6,
+                    'impact': 'MEDIUM',
+                    'recommendation': 'Manual review of threat keyword context required'
+                })
+
+        return results
+
     def _calculate_risk_score(self, results: Dict) -> int:
         """
-        Calculate overall adverse inference risk score (0-100).
+        Calculate overall adverse inference risk score using Probability × Impact formula.
 
-        Higher score = more suspicious patterns detected.
-        This is NOT a threat score - it's a "further investigation needed" score.
+        Professional Intelligence Methodology:
+        Instead of arbitrary severity points, we use:
+
+        Risk Score = Σ (Probability × Impact) × 25
+
+        Where:
+        - Probability (0-1): How likely is the inference correct?
+          - CONFIRMED: 1.0 (Wayback Machine verification, hard evidence)
+          - PROBABLE: 0.75 (Strong indicators, corroborating evidence)
+          - POSSIBLE: 0.5 (Single indicator, circumstantial)
+          - SPECULATIVE: 0.25 (Weak evidence)
+
+        - Impact (1-4): How serious is the finding if true?
+          - CRITICAL: 4 (Deliberate deception, active threat)
+          - HIGH: 3 (Significant security/privacy concern)
+          - MEDIUM: 2 (Notable pattern requiring investigation)
+          - LOW: 1 (Minor anomaly, low significance)
+
+        Example:
+        - Temporal gap with Wayback showing profile scrubbing:
+          Probability = 1.0 (confirmed by Wayback)
+          Impact = 4 (deliberate deception)
+          Risk contribution = 1.0 × 4 × 25 = 100 points
+
+        - Username with privacy keywords:
+          Probability = 0.5 (could be coincidence)
+          Impact = 1 (low significance)
+          Risk contribution = 0.5 × 1 × 25 = 12.5 points
 
         Args:
             results: Adverse inference results
@@ -370,37 +648,208 @@ class AdverseInferenceEngine:
         Returns:
             Risk score 0-100
         """
-        score = 0
+        total_risk = 0.0
 
-        # Temporal gaps (20 points max)
+        # Temporal gaps - probability based on Wayback verification
         for gap in results['temporal_gaps']:
-            if gap['severity'] == 'HIGH':
-                score += 15
-            elif gap['severity'] == 'MEDIUM':
-                score += 10
+            # Determine probability
+            wayback = gap.get('wayback_verification', {})
+            if wayback.get('verified'):
+                if wayback.get('profile_existed_during_gap'):
+                    probability = 1.0  # CONFIRMED: Wayback shows scrubbing
+                else:
+                    probability = 0.75  # PROBABLE: Wayback shows genuine inactivity
+            else:
+                probability = 0.5  # POSSIBLE: No verification, circumstantial
 
-        # Scrubbing indicators (30 points max)
+            # Determine impact
+            severity = gap.get('severity', 'MEDIUM')
+            if severity == 'CRITICAL':
+                impact = 4  # Deliberate scrubbing
+            elif severity == 'HIGH':
+                impact = 3  # Long gap or suspicious pattern
+            elif severity == 'MEDIUM':
+                impact = 2  # Moderate gap
+            else:
+                impact = 1  # Short gap or explained
+
+            risk_contribution = probability * impact * 25
+            total_risk += risk_contribution
+
+        # Scrubbing indicators - high probability due to measurable data
         for indicator in results['scrubbing_indicators']:
-            if indicator['severity'] == 'HIGH':
-                score += 20
-            elif indicator['severity'] == 'MEDIUM':
-                score += 10
+            probability = 0.75  # PROBABLE: Based on statistical analysis
 
-        # Sock puppet indicators (25 points max)
+            severity = indicator.get('severity', 'MEDIUM')
+            if severity == 'HIGH':
+                impact = 3  # Mass scrubbing is serious
+            elif severity == 'MEDIUM':
+                impact = 2
+            else:
+                impact = 1
+
+            risk_contribution = probability * impact * 25
+            total_risk += risk_contribution
+
+        # Sock puppet indicators - moderate probability (could be coincidence)
         for indicator in results['sock_puppet_indicators']:
-            if indicator['severity'] == 'MEDIUM':
-                score += 15
-            elif indicator['severity'] == 'LOW':
-                score += 5
+            probability = 0.5  # POSSIBLE: Pattern-based, not confirmed
 
-        # OpSec indicators (15 points max)
+            severity = indicator.get('severity', 'MEDIUM')
+            if severity == 'MEDIUM':
+                impact = 2
+            elif severity == 'LOW':
+                impact = 1
+            else:
+                impact = 3
+
+            risk_contribution = probability * impact * 25
+            total_risk += risk_contribution
+
+        # OpSec indicators - low probability (normal privacy-conscious behavior)
         for indicator in results['opsec_indicators']:
-            if indicator['severity'] == 'MEDIUM':
-                score += 10
-            elif indicator['severity'] == 'LOW':
-                score += 5
+            probability = 0.25  # SPECULATIVE: Could be normal privacy
 
-        # Anomalies (10 points max)
-        score += min(len(results['anomalies']) * 2, 10)
+            severity = indicator.get('severity', 'MEDIUM')
+            if severity == 'MEDIUM':
+                impact = 2
+            elif severity == 'LOW':
+                impact = 1
+            else:
+                impact = 3
 
-        return min(score, 100)
+            risk_contribution = probability * impact * 25
+            total_risk += risk_contribution
+
+        # Anomalies - very low probability (often normal variation)
+        for anomaly in results['anomalies']:
+            probability = 0.25  # SPECULATIVE
+            impact = 1  # LOW impact
+            risk_contribution = probability * impact * 25
+            total_risk += risk_contribution
+
+        return min(int(total_risk), 100)
+
+    def _verify_gap_with_wayback(self, accounts: List[Dict], start_year: int, end_year: int) -> Dict:
+        """
+        Verify temporal gaps using Wayback Machine (Internet Archive).
+
+        Professional OSINT Tradecraft:
+        - If profile exists in Wayback during gap → Profile was active but later deleted (SCRUBBING)
+        - If profile shows 404 in Wayback during gap → Profile truly didn't exist (GENUINE INACTIVITY)
+
+        This distinguishes between:
+        1. Subject took a break from platform (genuine inactivity)
+        2. Subject deleted old content to hide past activity (scrubbing)
+
+        Example:
+        - Twitter profile created 2015, posts until 2017, gap until 2020, resumes 2020
+        - Wayback check for 2018-2019:
+          - If snapshots show profile with content → Subject deleted 2017-2019 posts (SUSPICIOUS)
+          - If snapshots show 404 → Account was deactivated (LESS SUSPICIOUS)
+
+        Args:
+            accounts: List of account dictionaries
+            start_year: Start of gap
+            end_year: End of gap
+
+        Returns:
+            Dictionary with verification results
+        """
+        verification = {
+            'verified': False,
+            'profile_existed_during_gap': False,
+            'snapshots_found': 0,
+            'sample_snapshots': [],
+            'error': None
+        }
+
+        try:
+            # Find accounts with profile URLs
+            for account in accounts:
+                if not account:
+                    continue
+
+                # Get profile URL
+                profile_url = account.get('profile_url')
+                if not profile_url:
+                    # Try to construct from platform and username
+                    platform = account.get('platform', '').lower()
+                    username = account.get('username')
+                    if platform and username:
+                        # Construct URL based on platform
+                        url_patterns = {
+                            'twitter': f'https://twitter.com/{username}',
+                            'github': f'https://github.com/{username}',
+                            'linkedin': f'https://linkedin.com/in/{username}',
+                            'instagram': f'https://instagram.com/{username}'
+                        }
+                        profile_url = url_patterns.get(platform)
+
+                if not profile_url:
+                    continue
+
+                # Query Wayback Machine CDX API for snapshots during gap
+                # CDX API: http://web.archive.org/cdx/search/cdx
+                cdx_url = 'http://web.archive.org/cdx/search/cdx'
+                params = {
+                    'url': profile_url,
+                    'from': str(start_year),
+                    'to': str(end_year),
+                    'output': 'json',
+                    'fl': 'timestamp,statuscode,original',
+                    'limit': 100
+                }
+
+                response = requests.get(cdx_url, params=params, timeout=10)
+
+                if response.status_code == 200:
+                    try:
+                        snapshots = response.json()
+
+                        # Skip header row if present
+                        if snapshots and isinstance(snapshots[0], list) and snapshots[0][0] == 'timestamp':
+                            snapshots = snapshots[1:]
+
+                        if snapshots:
+                            verification['verified'] = True
+                            verification['snapshots_found'] = len(snapshots)
+
+                            # Check status codes
+                            # 200 = page existed, 404 = page not found
+                            success_snapshots = []
+                            for snapshot in snapshots:
+                                if len(snapshot) >= 2:
+                                    timestamp, statuscode = snapshot[0], snapshot[1]
+                                    if statuscode.startswith('2'):  # 200, 201, etc.
+                                        success_snapshots.append({
+                                            'timestamp': timestamp,
+                                            'year': int(timestamp[:4]) if len(timestamp) >= 4 else None
+                                        })
+
+                            if success_snapshots:
+                                verification['profile_existed_during_gap'] = True
+                                verification['sample_snapshots'] = success_snapshots[:5]  # Top 5
+                                logger.info(
+                                    f"Wayback verification: {profile_url} EXISTED during {start_year}-{end_year} "
+                                    f"({len(success_snapshots)} snapshots found)"
+                                )
+                            else:
+                                verification['profile_existed_during_gap'] = False
+                                logger.info(
+                                    f"Wayback verification: {profile_url} did NOT exist during {start_year}-{end_year} "
+                                    f"(all snapshots returned 404)"
+                                )
+
+                            # Found verification for at least one account, return
+                            return verification
+
+                    except Exception as e:
+                        logger.debug(f"Failed to parse Wayback response: {e}")
+                        continue
+
+        except Exception as e:
+            verification['error'] = str(e)
+            logger.debug(f"Wayback verification failed: {e}")
+
+        return verification

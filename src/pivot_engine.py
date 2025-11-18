@@ -172,7 +172,8 @@ class PivotEngine:
             UsernameTransform(),
             DomainTransform(
                 securitytrails_api_key=api_keys.get('SECURITYTRAILS_API_KEY'),
-                shodan_api_key=api_keys.get('SHODAN_API_KEY')
+                shodan_api_key=api_keys.get('SHODAN_API_KEY'),
+                whoisxml_api_key=api_keys.get('WHOISXML_API_KEY')
             ),
             PhoneTransform(
                 numverify_api_key=api_keys.get('NUMVERIFY_API_KEY')

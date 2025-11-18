@@ -213,6 +213,36 @@ class IPTransform(BaseTransform):
                     if shodan_data.get('ports'):
                         result.metadata['open_ports'] = shodan_data['ports']
 
+            # Step 8: Reverse IP Lookup (find other domains on same IP)
+            reverse_ip_domains = self._reverse_ip_lookup(ip_address)
+            if reverse_ip_domains:
+                result.metadata['reverse_ip'] = {
+                    'total_domains': len(reverse_ip_domains),
+                    'domains': reverse_ip_domains[:20]  # Top 20
+                }
+
+                # Create domain selectors for pivoting
+                for domain in reverse_ip_domains[:10]:  # Pivot on top 10
+                    domain_selector = Selector(
+                        type=SelectorType.DOMAIN,
+                        value=domain,
+                        source=f"reverse_ip:{ip_address}",
+                        context={
+                            'shared_ip': ip_address,
+                            'discovery_method': 'reverse_ip_lookup'
+                        }
+                    )
+                    result.discovered_entities.append(DiscoveredEntity(
+                        selector=domain_selector,
+                        reliability=Reliability.CONFIRMED,
+                        source="reverse_ip_lookup",
+                        confidence=90,
+                        metadata={
+                            'shared_hosting': len(reverse_ip_domains) > 1,
+                            'total_domains_on_ip': len(reverse_ip_domains)
+                        }
+                    ))
+
             result.success = True
             result.metadata['total_discoveries'] = len(result.discovered_entities)
 
@@ -439,3 +469,96 @@ class IPTransform(BaseTransform):
         except Exception as e:
             logger.error(f"Shodan query failed: {e}")
             return None
+
+    def _reverse_ip_lookup(self, ip_address: str) -> List[str]:
+        """
+        Perform reverse IP lookup to find other domains sharing the same IP.
+
+        Professional OSINT Use Case:
+        - Identify shared hosting infrastructure
+        - Discover related domains/sites (may indicate same owner)
+        - Find phishing infrastructure (multiple domains on one IP)
+        - Attribution: If attacker controls multiple domains, they may share IPs
+
+        Uses free APIs (no key required):
+        - HackerTarget.com (primary)
+        - ViewDNS.info (fallback)
+
+        Args:
+            ip_address: IP to reverse lookup
+
+        Returns:
+            List of domain names sharing this IP
+        """
+        domains = []
+
+        # Skip private IPs
+        try:
+            ip_obj = ipaddress.ip_address(ip_address)
+            if ip_obj.is_private:
+                logger.debug(f"Skipping reverse IP for private address: {ip_address}")
+                return []
+        except:
+            return []
+
+        # Method 1: HackerTarget (free, no API key, 100 requests/day)
+        try:
+            url = f"https://api.hackertarget.com/reverseiplookup/?q={ip_address}"
+            response = requests.get(url, timeout=10)
+
+            if response.status_code == 200:
+                text = response.text.strip()
+
+                # Check for error messages
+                if 'error' not in text.lower() and 'no dns' not in text.lower():
+                    # Split by newlines
+                    domains = [d.strip() for d in text.split('\n') if d.strip()]
+
+                    if domains:
+                        logger.info(f"Reverse IP: {ip_address} → {len(domains)} domains found")
+                        return domains
+        except Exception as e:
+            logger.debug(f"HackerTarget reverse IP failed: {e}")
+
+        # Method 2: ViewDNS.info (fallback, free, no key)
+        try:
+            url = f"https://viewdns.info/reverseip/?host={ip_address}&t=1"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                # Parse HTML (simple regex extraction)
+                import re
+                # Look for domain pattern in table rows
+                domain_pattern = r'<td>([a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,})</td>'
+                found_domains = re.findall(domain_pattern, response.text)
+
+                if found_domains:
+                    domains = list(set(found_domains))  # Deduplicate
+                    logger.info(f"Reverse IP (ViewDNS): {ip_address} → {len(domains)} domains")
+                    return domains
+        except Exception as e:
+            logger.debug(f"ViewDNS reverse IP failed: {e}")
+
+        # Method 3: Shodan (if available)
+        if self.shodan_api_key:
+            try:
+                url = f"https://api.shodan.io/dns/reverse?ips={ip_address}"
+                params = {'key': self.shodan_api_key}
+                response = requests.get(url, params=params, timeout=10)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if ip_address in data and data[ip_address]:
+                        domains = data[ip_address]
+                        logger.info(f"Reverse IP (Shodan): {ip_address} → {len(domains)} domains")
+                        return domains
+            except Exception as e:
+                logger.debug(f"Shodan reverse IP failed: {e}")
+
+        if not domains:
+            logger.debug(f"No reverse IP results for {ip_address}")
+
+        return domains
