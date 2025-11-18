@@ -564,52 +564,6 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     print("\n✅ Enterprise analytics complete!\n")
 
     # =================================================================
-    # SAVE TO DATABASE
-    # =================================================================
-
-    print("="*70)
-    print("💾 SAVING INVESTIGATION")
-    print("="*70 + "\n")
-
-    # Create investigation record
-    investigation_id = db.create_investigation(
-        target_name=target_name,
-        mode="advanced_v3",
-        target_profile=target_profile
-    )
-
-    # Save all accounts
-    for account in enriched_accounts:
-        if not account:
-            continue
-        db.save_account(investigation_id, account)
-
-    # Save metadata
-    metadata = {
-        'total_leads': len(all_leads),
-        'preview_accounts': len(preview_accounts),
-        'ai_filtered': len(filtered_accounts),
-        'confirmed_accounts': len(confirmed_accounts),
-        'deep_analyzed': len(enriched_accounts),
-        'nlp_results': nlp_results,
-        'temporal_patterns': temporal_patterns,
-        'graph_metrics': graph_metrics,
-        'tone_results': tone_results,
-        'discovered_emails': discovered_emails,
-        'wayback_results': wayback_results,
-        'username_variations': username_variations,
-        'pivot_leads': pivot_leads,
-        'behavioral_profile': behavioral_profile,
-        'timeline_file': timeline_file,
-        'heatmap_file': heatmap_file,
-        'used_ai': ai_engine is not None
-    }
-
-    db.update_investigation_metadata(investigation_id, metadata)
-
-    print(f"✅ Investigation saved to database (ID: {investigation_id})")
-
-    # =================================================================
     # GENERATE REPORT
     # =================================================================
 
@@ -727,6 +681,34 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         f.write("*Cost: $0.00 • Accuracy: 100% • Privacy: 100% Local*\n")
 
     print(f"✅ Report saved: {report_file}\n")
+
+    # =================================================================
+    # SAVE TO DATABASE
+    # =================================================================
+
+    print("="*70)
+    print("💾 SAVING INVESTIGATION")
+    print("="*70 + "\n")
+
+    # Extract interests from target profile
+    interests = []
+    if target_profile.get('interests'):
+        interests = target_profile['interests']
+    elif target_profile.get('occupation'):
+        interests = [target_profile['occupation']]
+
+    # Save investigation to database
+    investigation_id = db.save_investigation(
+        target=target_name,
+        accounts=enriched_accounts,
+        predictions=username_variations if username_variations else [],
+        interests=interests,
+        high_confidence_count=len(confirmed_accounts),
+        report_path=report_file,
+        graph_path=timeline_file if timeline_file else heatmap_file
+    )
+
+    print(f"✅ Investigation saved to database (ID: {investigation_id})\n")
 
     # =================================================================
     # FINAL SUMMARY
