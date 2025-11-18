@@ -14,6 +14,7 @@ pip install -r requirements_advanced.txt
 - `python-whois` - WHOIS record retrieval
 - `pyOpenSSL` - SSL/TLS certificate analysis
 - `dnspython` - DNS enumeration
+- `phonenumbers` - Phone number parsing and validation
 - `requests` - HTTP requests
 - `beautifulsoup4` - HTML parsing
 
@@ -30,7 +31,7 @@ python -m spacy download en_core_web_sm
 Test that all imports work:
 
 ```bash
-python -c "import whois; import OpenSSL; import dns.resolver; print('✅ All dependencies installed successfully!')"
+python -c "import whois; import OpenSSL; import dns.resolver; import phonenumbers; print('✅ All dependencies installed successfully!')"
 ```
 
 ---
@@ -190,6 +191,12 @@ pip install pyOpenSSL
 
 ```bash
 pip install dnspython
+```
+
+### ModuleNotFoundError: No module named 'phonenumbers'
+
+```bash
+pip install phonenumbers
 ```
 
 ### spaCy model not found
