@@ -17,7 +17,139 @@ class AccountSelector:
     """
 
     def __init__(self):
-        pass
+        self.min_quality_score = 20  # Minimum quality threshold
+
+    def score_account_quality(self, account: Dict) -> int:
+        """
+        Score account based on data richness (0-100)
+
+        Args:
+            account: Account data dictionary
+
+        Returns:
+            Quality score 0-100
+        """
+        if not account:
+            return 0
+
+        score = 0
+
+        # Has name (20 points)
+        if account.get('name'):
+            score += 20
+
+        # Has bio/description (30 points)
+        bio = account.get('bio') or account.get('description')
+        if bio:
+            # Longer bio = better quality
+            bio_length = len(str(bio))
+            if bio_length > 50:
+                score += 30
+            elif bio_length > 20:
+                score += 20
+            else:
+                score += 10
+
+        # Has location (10 points)
+        if account.get('location'):
+            score += 10
+
+        # Has followers/social metrics (15 points)
+        if account.get('followers') or account.get('friends'):
+            score += 15
+
+        # Has posts/content (25 points)
+        posts = account.get('posts', [])
+        if posts:
+            score += min(25, len(posts) * 5)
+
+        return score
+
+    def auto_filter_low_quality(
+        self,
+        accounts: List[Dict],
+        min_score: int = None,
+        show_filtered: bool = True
+    ) -> List[Dict]:
+        """
+        Automatically filter out low-quality accounts
+
+        Args:
+            accounts: List of accounts to filter
+            min_score: Minimum quality score (default: self.min_quality_score)
+            show_filtered: Print filtered accounts
+
+        Returns:
+            List of high-quality accounts
+        """
+        if min_score is None:
+            min_score = self.min_quality_score
+
+        high_quality = []
+        low_quality = []
+
+        for account in accounts:
+            if not account:
+                continue
+
+            score = self.score_account_quality(account)
+            account['quality_score'] = score
+
+            if score >= min_score:
+                high_quality.append(account)
+            else:
+                low_quality.append(account)
+
+        if show_filtered and low_quality:
+            logger.info(f"🗑️  Filtered out {len(low_quality)} low-quality accounts:")
+            for account in low_quality:
+                url = account.get('url', 'Unknown')
+                score = account.get('quality_score', 0)
+                logger.info(f"   ❌ {url} (score: {score})")
+
+        logger.info(f"✅ Kept {len(high_quality)}/{len(accounts)} high-quality accounts")
+
+        return high_quality
+
+    def categorize_by_quality(self, accounts: List[Dict]) -> Dict:
+        """
+        Categorize accounts by quality tier
+
+        Args:
+            accounts: List of accounts
+
+        Returns:
+            {
+                'excellent': [],  # 80-100 score
+                'good': [],       # 50-79 score
+                'fair': [],       # 20-49 score
+                'poor': []        # 0-19 score
+            }
+        """
+        categorized = {
+            'excellent': [],
+            'good': [],
+            'fair': [],
+            'poor': []
+        }
+
+        for account in accounts:
+            if not account:
+                continue
+
+            score = self.score_account_quality(account)
+            account['quality_score'] = score
+
+            if score >= 80:
+                categorized['excellent'].append(account)
+            elif score >= 50:
+                categorized['good'].append(account)
+            elif score >= 20:
+                categorized['fair'].append(account)
+            else:
+                categorized['poor'].append(account)
+
+        return categorized
 
     def display_account_preview(self, index: int, account: Dict, total: int) -> str:
         """
@@ -38,13 +170,26 @@ class AccountSelector:
         location = account.get('location', 'N/A')
         followers = account.get('followers', 'N/A')
 
+        # Calculate quality score
+        quality_score = account.get('quality_score') or self.score_account_quality(account)
+
+        # Quality indicator
+        if quality_score >= 80:
+            quality_indicator = "🟢 EXCELLENT"
+        elif quality_score >= 50:
+            quality_indicator = "🟡 GOOD"
+        elif quality_score >= 20:
+            quality_indicator = "🟠 FAIR"
+        else:
+            quality_indicator = "🔴 POOR"
+
         # Truncate bio
         if bio and len(bio) > 150:
             bio = bio[:147] + "..."
 
         preview = f"""
 {'='*70}
-Account #{index}/{total}
+Account #{index}/{total} | Quality: {quality_indicator} ({quality_score}/100)
 {'='*70}
 
 🌐 Platform: {platform.upper()}
