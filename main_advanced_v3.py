@@ -785,6 +785,37 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
                         for keyword, count in keyword_counts.most_common(10):
                             f.write(f"- {keyword} ({count}x)\n")
                         f.write("\n")
+
+                    # ADDED: NLP-extracted entities and skills
+                    if nlp_results and isinstance(nlp_results, list):
+                        all_entities = []
+                        all_skills = []
+
+                        for nlp_result in nlp_results:
+                            if isinstance(nlp_result, dict):
+                                entities = nlp_result.get('entities', {})
+                                if isinstance(entities, dict):
+                                    for entity_type, values in entities.items():
+                                        if isinstance(values, list):
+                                            all_entities.extend(values)
+
+                                skills = nlp_result.get('skills', [])
+                                if isinstance(skills, list):
+                                    all_skills.extend(skills)
+
+                        if all_entities:
+                            entity_counts = Counter(all_entities)
+                            f.write("**Named Entities (NLP):**\n")
+                            for entity, count in entity_counts.most_common(8):
+                                f.write(f"- {entity} ({count}x)\n")
+                            f.write("\n")
+
+                        if all_skills:
+                            skill_counts = Counter(all_skills)
+                            f.write("**Skills Detected (NLP):**\n")
+                            for skill, count in skill_counts.most_common(8):
+                                f.write(f"- {skill} ({count}x)\n")
+                            f.write("\n")
                 except Exception as e:
                     logger.warning(f"Error writing behavioral analysis: {e}")
                     f.write("*Behavioral analysis data unavailable*\n\n")
@@ -798,11 +829,12 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
 
                     for pattern in temporal_patterns:
                         if isinstance(pattern, dict):
-                            hours = pattern.get('most_active_hours', [])
+                            # FIXED: Use correct field names from temporal analyzer
+                            hours = pattern.get('peak_hours', [])  # Was 'most_active_hours'
                             if isinstance(hours, list):
                                 active_times.extend(hours)
 
-                            days = pattern.get('most_active_days', [])
+                            days = pattern.get('active_days', [])  # Was 'most_active_days'
                             if isinstance(days, list):
                                 active_days.extend(days)
 

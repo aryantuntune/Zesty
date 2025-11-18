@@ -367,6 +367,42 @@ class BehavioralAnalyzer:
 
     # ========== COMPREHENSIVE ANALYSIS ==========
 
+    def _extract_key_phrases(self, text: str) -> List[str]:
+        """
+        Extract significant keywords/phrases from text (for Common Keywords section)
+
+        Args:
+            text: Content to analyze
+
+        Returns:
+            List of significant words (nouns, verbs, tech terms)
+        """
+        if not text or len(text) < 10:
+            return []
+
+        # Remove special characters and lowercase
+        cleaned = re.sub(r'[^\w\s-]', ' ', text.lower())
+        words = cleaned.split()
+
+        # Filter out common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+                     'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'be', 'been',
+                     'has', 'have', 'had', 'will', 'would', 'should', 'could', 'may',
+                     'this', 'that', 'these', 'those', 'it', 'its', 'my', 'your', 'their',
+                     'we', 'you', 'they', 'them', 'our', 'i', 'me'}
+
+        # Filter words: length > 3, not stop words, not pure numbers
+        significant_words = [
+            w for w in words
+            if len(w) > 3 and w not in stop_words and not w.isdigit()
+        ]
+
+        # Count frequency
+        word_counts = Counter(significant_words)
+
+        # Return top 15 most common words
+        return [word for word, count in word_counts.most_common(15)]
+
     def build_behavioral_profile(self, account_data: Dict) -> Dict:
         """
         Build complete behavioral profile from account data
@@ -379,6 +415,7 @@ class BehavioralAnalyzer:
         """
         profile = {
             'interests': set(),
+            'key_phrases': [],  # ADDED: For keyword extraction from posts
             'writing_style': {},
             'activity_patterns': {},
             'themes': []
@@ -417,6 +454,8 @@ class BehavioralAnalyzer:
             all_content = ' '.join(post_texts)
             if all_content:
                 profile['interests'].update(self.extract_interests(all_content))
+                # ADDED: Extract key phrases (frequent significant words from posts)
+                profile['key_phrases'] = self._extract_key_phrases(all_content)
             profile['activity_patterns'] = self.extract_activity_patterns(posts)
 
         # Convert set to list for JSON serialization
