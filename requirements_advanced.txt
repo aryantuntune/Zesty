@@ -10,6 +10,7 @@ tqdm>=4.66.0
 python-whois>=0.8.0        # WHOIS record retrieval
 dnspython>=2.4.0           # DNS enumeration (also needed for email verification)
 pyOpenSSL>=23.3.0          # SSL/TLS certificate analysis
+phonenumbers>=8.13.0       # Phone number parsing and validation
 
 # OSINT tools
 sherlock-project>=0.14.3
