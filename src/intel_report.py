@@ -43,7 +43,11 @@ class IntelligenceReportGenerator:
         temporal_patterns: List[Dict],
         graph_metrics: Dict,
         nlp_results: List[Dict],
-        investigation_id: int
+        investigation_id: int,
+        pivot_result=None,
+        verification_results=None,
+        adverse_results=None,
+        opsec_report=None
     ) -> str:
         """
         Generate complete intelligence dossier
@@ -56,6 +60,10 @@ class IntelligenceReportGenerator:
             graph_metrics: Network analysis results
             nlp_results: NLP entity extraction results
             investigation_id: Investigation ID
+            pivot_result: Automated pivot discoveries (optional)
+            verification_results: 3-source verification results (optional)
+            adverse_results: Adverse inference analysis (optional)
+            opsec_report: Operational security assessment (optional)
 
         Returns:
             Formatted intelligence report (markdown)
@@ -85,6 +93,22 @@ class IntelligenceReportGenerator:
 
         # Network Analysis
         report.append(self._generate_network_analysis(graph_metrics, accounts))
+
+        # Pivot Intelligence (if available)
+        if pivot_result:
+            report.append(self._generate_pivot_intelligence(pivot_result))
+
+        # 3-Source Verification (if available)
+        if verification_results:
+            report.append(self._generate_verification_section(verification_results))
+
+        # Adverse Inference Analysis (if available)
+        if adverse_results:
+            report.append(self._generate_adverse_inference_section(adverse_results))
+
+        # OpSec Assessment (if available)
+        if opsec_report:
+            report.append(self._generate_opsec_section(opsec_report))
 
         # Strategic Recommendations
         report.append(self._generate_recommendations(accounts, threat_level))
@@ -601,6 +625,145 @@ The subject maintains a digital footprint across {len(accounts)} verified platfo
                 network += f"- {rel}\n"
 
         return network
+
+    def _generate_pivot_intelligence(self, pivot_result) -> str:
+        """Generate automated pivot intelligence section"""
+
+        pivot_intel = f"""## 6.5 AUTOMATED PIVOT INTELLIGENCE
+
+**Breadth-First OSINT Discovery** *(Professional Transform Chain)*
+
+"""
+
+        # Summary statistics
+        pivot_intel += f"**Execution Summary:**\n"
+        pivot_intel += f"- Selectors Processed: {pivot_result.total_selectors_processed}\n"
+        pivot_intel += f"- Entities Discovered: {len(pivot_result.discovered_entities)}\n"
+        pivot_intel += f"- Maximum Depth: {pivot_result.max_depth_reached} hops\n"
+        pivot_intel += f"- API Calls: {pivot_result.total_api_calls}\n"
+        pivot_intel += f"- Execution Time: {pivot_result.execution_time:.2f}s\n\n"
+
+        # Discoveries by type
+        entity_counts = pivot_result.to_dict()['entities_by_type']
+        if entity_counts:
+            pivot_intel += "**Discoveries by Type:**\n"
+            for entity_type, count in sorted(entity_counts.items(), key=lambda x: x[1], reverse=True):
+                pivot_intel += f"- {entity_type.upper()}: {count}\n"
+            pivot_intel += "\n"
+
+        # Reliability distribution
+        reliability_counts = pivot_result.to_dict()['entities_by_reliability']
+        if reliability_counts:
+            pivot_intel += "**Data Reliability Distribution:**\n"
+            for reliability, count in sorted(reliability_counts.items()):
+                pivot_intel += f"- {reliability}: {count} entities\n"
+            pivot_intel += "\n"
+
+        # Key discoveries (CONFIRMED entities only)
+        confirmed_discoveries = [
+            entity for entity in pivot_result.discovered_entities
+            if entity.reliability.value == 'CONFIRMED'
+        ]
+
+        if confirmed_discoveries:
+            pivot_intel += "**High-Confidence Discoveries (CONFIRMED):**\n\n"
+
+            # Group by type
+            by_type = {}
+            for entity in confirmed_discoveries[:20]:  # Top 20
+                entity_type = entity.selector.type.value
+                if entity_type not in by_type:
+                    by_type[entity_type] = []
+                by_type[entity_type].append(entity)
+
+            for entity_type, entities in sorted(by_type.items()):
+                pivot_intel += f"*{entity_type.upper()}:*\n"
+                for entity in entities[:5]:  # Top 5 per type
+                    pivot_intel += f"- {entity.selector.value} (Source: {entity.source}, "
+                    pivot_intel += f"Confidence: {entity.confidence}%)\n"
+
+                    # Add metadata if important
+                    if entity_type == 'domain' and entity.metadata.get('resolves_from'):
+                        pivot_intel += f"  → Resolves from: {entity.metadata['resolves_from']}\n"
+                    elif entity_type == 'email' and entity.metadata.get('breach_count'):
+                        pivot_intel += f"  → Found in {entity.metadata['breach_count']} breaches\n"
+                    elif entity_type == 'location' and entity.metadata.get('latitude'):
+                        pivot_intel += f"  → Lat/Long: {entity.metadata['latitude']}, {entity.metadata['longitude']}\n"
+
+                pivot_intel += "\n"
+
+        # Transform performance
+        if pivot_result.transform_stats:
+            pivot_intel += "**Transform Performance:**\n"
+            for transform_name, stats in pivot_result.transform_stats.items():
+                pivot_intel += f"- {transform_name}: {stats['discoveries']} discoveries, "
+                pivot_intel += f"{stats['executions']} executions, "
+                pivot_intel += f"{stats['api_calls']} API calls\n"
+            pivot_intel += "\n"
+
+        # Sample pivot chains (provenance)
+        if pivot_result.pivot_chains:
+            pivot_intel += "**Sample Pivot Chains (Provenance):**\n"
+            for chain in pivot_result.pivot_chains[:5]:  # Top 5 chains
+                pivot_intel += f"- {str(chain)}\n"
+            pivot_intel += "\n"
+
+        pivot_intel += "*Note: Automated pivoting uses professional OSINT transforms including breach databases, WHOIS, DNS enumeration, GeoIP, and carrier lookups.*\n"
+
+        return pivot_intel
+
+    def _generate_verification_section(self, verification_results: Dict) -> str:
+        """Generate 3-source verification section"""
+        section = "## 6.6 DATA RELIABILITY & SOURCE VERIFICATION\n\n"
+        section += "**3-Source Verification Standards Applied**\n\n"
+
+        # Count by verification level
+        levels = {}
+        for field, result in verification_results.items():
+            level = result.verification_level.value
+            if level not in levels:
+                levels[level] = []
+            levels[level].append((field, result))
+
+        for level in ['CONFIRMED', 'PROBABLE', 'POSSIBLE', 'UNVERIFIED', 'CONTRADICTED']:
+            if level in levels:
+                section += f"**{level}:** {len(levels[level])} data points\n"
+                for field, result in levels[level][:3]:  # Top 3 per level
+                    section += f"- {field.title()}: {result.value} (Sources: {', '.join(result.sources)})\n"
+                section += "\n"
+
+        return section
+
+    def _generate_adverse_inference_section(self, adverse_results: Dict) -> str:
+        """Generate adverse inference analysis section"""
+        section = "## 6.7 ADVERSE INFERENCE & INTELLIGENCE GAPS\n\n"
+        section += f"**Risk Score:** {adverse_results['risk_score']}/100\n\n"
+
+        if adverse_results['temporal_gaps']:
+            section += "**Temporal Gaps:**\n"
+            for gap in adverse_results['temporal_gaps']:
+                section += f"- {gap['type']}: {gap['inference']}\n"
+            section += "\n"
+
+        if adverse_results['scrubbing_indicators']:
+            section += "**Profile Scrubbing Indicators:**\n"
+            for indicator in adverse_results['scrubbing_indicators']:
+                section += f"- {indicator['type']}: {indicator['inference']}\n"
+            section += "\n"
+
+        if adverse_results['opsec_indicators']:
+            section += "**OpSec Awareness Indicators:**\n"
+            for indicator in adverse_results['opsec_indicators']:
+                section += f"- {indicator['type']}: {indicator['inference']}\n"
+            section += "\n"
+
+        return section
+
+    def _generate_opsec_section(self, opsec_report: str) -> str:
+        """Generate operational security section"""
+        section = "## 6.8 OPERATIONAL SECURITY ASSESSMENT\n\n"
+        section += opsec_report
+        return section
 
     def _generate_recommendations(self, accounts: List[Dict], threat_level: str) -> str:
         """Generate strategic recommendations"""

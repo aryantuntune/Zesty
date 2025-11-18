@@ -22,7 +22,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from src.dragnet import Dragnet
 from src.scrapers import PlatformScraper
 from src.behavioral import BehavioralAnalyzer
-from src.pivot import PivotEngine
 from src.database import InvestigationDB
 from src.nlp_engine import LocalNLPEngine
 from src.temporal_analyzer import TemporalAnalyzer
@@ -40,6 +39,11 @@ from src.local_ai import LocalAI  # NEW!
 from src.url_verifier import URLVerifier  # NEW!
 from src.enhanced_scraper import EnhancedScraper  # NEW!
 from src.intel_report import IntelligenceReportGenerator  # NEW!
+from src.pivot_engine import PivotEngine as AutoPivotEngine  # Professional OSINT Pivoting
+from src.transforms.base_transform import Selector, SelectorType  # Pivot data structures
+from src.verification import VerificationEngine  # 3-source verification
+from src.adverse_inference import AdverseInferenceEngine  # Intelligence gap analysis
+from src.opsec import OpSecWarning  # Operational security
 from src.utils import setup_logger
 
 logger = setup_logger(__name__)
@@ -67,15 +71,18 @@ def print_banner():
    Phase 3: Data Collection - Enhanced scraping with fallbacks
    Phase 4: Verification - AI-powered validation
    Phase 5: Deep Analysis - Comprehensive intelligence gathering
+   Phase 5.5: Automated Pivoting - Professional OSINT transforms
    Phase 6: Intelligence Fusion - Multi-layer analytics
    Phase 7: Report Generation - TLP-classified dossier
 
 🧠 INTELLIGENCE CAPABILITIES:
+   • Automated Pivoting - Breach checks, WHOIS, DNS, GeoIP lookups
    • Behavioral Analysis - Interest profiling, pattern detection
    • Temporal Analysis - Activity patterns, timezone estimation
    • Network Analysis - Platform relationships, connection mapping
    • NLP Analysis - Entity extraction, skill identification
    • Threat Assessment - Risk scoring, vulnerability analysis
+   • Provenance Tracking - Source reliability and 3-source verification
 
 """
     print(banner)
@@ -91,6 +98,17 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     """
 
     print_banner()
+
+    # Load API keys for professional transforms (optional)
+    api_keys = {
+        'HIBP_API_KEY': os.getenv('HIBP_API_KEY'),
+        'HUNTER_API_KEY': os.getenv('HUNTER_API_KEY'),
+        'SECURITYTRAILS_API_KEY': os.getenv('SECURITYTRAILS_API_KEY'),
+        'SHODAN_API_KEY': os.getenv('SHODAN_API_KEY'),
+        'IPINFO_TOKEN': os.getenv('IPINFO_TOKEN'),
+        'ABUSEIPDB_API_KEY': os.getenv('ABUSEIPDB_API_KEY'),
+        'NUMVERIFY_API_KEY': os.getenv('NUMVERIFY_API_KEY')
+    }
 
     # Initialize AI if requested
     ai_engine = None
@@ -441,6 +459,138 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     print(f"\n✅ Deep analysis complete!\n")
 
     # =================================================================
+    # PHASE 5.5: AUTOMATED INTELLIGENCE PIVOTING (Professional OSINT)
+    # =================================================================
+
+    print("="*70)
+    print("🔄 PHASE 5.5: AUTOMATED INTELLIGENCE PIVOTING")
+    print("="*70 + "\n")
+
+    print("🎯 Professional OSINT Pivoting:")
+    print("   • Extract selectors (emails, usernames, domains, phones, IPs)")
+    print("   • Auto-pivot on discovered intelligence")
+    print("   • Breach databases, WHOIS, DNS, GeoIP, carrier lookups")
+    print("   • Track provenance and reliability scoring\n")
+
+    # Initialize pivot engine
+    pivot_engine = AutoPivotEngine(
+        max_depth=3,  # Maximum 3 hops
+        max_selectors=100,  # Process up to 100 selectors
+        parallel_execution=True,
+        max_workers=5,
+        api_keys=api_keys
+    )
+
+    # Extract selectors from discovered accounts
+    initial_selectors = []
+
+    print(f"📥 Extracting selectors from {len(enriched_accounts)} accounts...\n")
+
+    for account in enriched_accounts:
+        if not account:
+            continue
+
+        # Extract email selectors
+        if account.get('email'):
+            email_selector = Selector(
+                type=SelectorType.EMAIL,
+                value=account['email'],
+                source=f"{account.get('platform', 'unknown')}_profile",
+                context={'account_url': account.get('url')}
+            )
+            initial_selectors.append(email_selector)
+
+        # Extract username selectors
+        if account.get('username'):
+            username_selector = Selector(
+                type=SelectorType.USERNAME,
+                value=account['username'],
+                source=f"{account.get('platform', 'unknown')}_profile",
+                context={'account_url': account.get('url')}
+            )
+            initial_selectors.append(username_selector)
+
+        # Extract domain selectors from URLs
+        url = account.get('url')
+        if url:
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                domain = parsed.netloc
+                if domain:
+                    domain_selector = Selector(
+                        type=SelectorType.DOMAIN,
+                        value=domain,
+                        source=f"{account.get('platform', 'unknown')}_url",
+                        context={'full_url': url}
+                    )
+                    initial_selectors.append(domain_selector)
+            except:
+                pass
+
+        # Extract name selectors
+        if account.get('name'):
+            name_selector = Selector(
+                type=SelectorType.NAME,
+                value=account['name'],
+                source=f"{account.get('platform', 'unknown')}_profile"
+            )
+            initial_selectors.append(name_selector)
+
+        # Extract location selectors
+        if account.get('location'):
+            location_selector = Selector(
+                type=SelectorType.LOCATION,
+                value=account['location'],
+                source=f"{account.get('platform', 'unknown')}_profile"
+            )
+            initial_selectors.append(location_selector)
+
+    print(f"   ✓ Extracted {len(initial_selectors)} initial selectors")
+
+    # Deduplicate selectors
+    unique_selectors = list(set(initial_selectors))
+    print(f"   ✓ Deduplicated to {len(unique_selectors)} unique selectors\n")
+
+    # Run automated pivoting
+    if unique_selectors:
+        print(f"🔄 Starting automated pivoting (max depth: 3, max selectors: 100)...\n")
+
+        try:
+            pivot_result = pivot_engine.pivot(unique_selectors)
+
+            print(f"\n✅ Pivoting complete!")
+            print(f"   • Selectors processed: {pivot_result.total_selectors_processed}")
+            print(f"   • Entities discovered: {len(pivot_result.discovered_entities)}")
+            print(f"   • API calls made: {pivot_result.total_api_calls}")
+            print(f"   • Max depth reached: {pivot_result.max_depth_reached}")
+            print(f"   • Execution time: {pivot_result.execution_time:.2f}s\n")
+
+            # Show discovery breakdown
+            if pivot_result.discovered_entities:
+                entity_counts = pivot_result.to_dict()['entities_by_type']
+                print(f"   📊 Discoveries by type:")
+                for entity_type, count in sorted(entity_counts.items(), key=lambda x: x[1], reverse=True):
+                    print(f"      • {entity_type}: {count}")
+                print()
+
+            # Show transform statistics
+            print(f"   🔧 Transform statistics:")
+            for transform_name, stats in pivot_result.transform_stats.items():
+                print(f"      • {transform_name}: {stats['discoveries']} discoveries "
+                      f"({stats['executions']} runs, {stats['api_calls']} API calls)")
+            print()
+
+        except Exception as e:
+            logger.error(f"Pivot engine failed: {e}")
+            print(f"   ⚠️  Pivoting failed: {e}")
+            print(f"   Continuing with available data...\n")
+            pivot_result = None
+    else:
+        print("   ℹ️  No selectors available for pivoting\n")
+        pivot_result = None
+
+    # =================================================================
     # PHASE 6: ENTERPRISE ANALYTICS
     # =================================================================
 
@@ -448,7 +598,7 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     print("🚀 PHASE 6: ENTERPRISE ANALYTICS")
     print("="*70 + "\n")
 
-    print("⚙️  Initializing 11 enterprise modules...\n")
+    print("⚙️  Initializing 14 professional intelligence modules...\n")
 
     # Initialize all enterprise modules
     db = InvestigationDB()
@@ -603,7 +753,40 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
     except Exception as e:
         logger.warning(f"Heatmap generation failed: {e}")
 
-    print("\n✅ Enterprise analytics complete!\n")
+    # === 3-Source Verification ===
+    print("[12/14] ✓ 3-Source Data Verification...")
+    verification_engine = VerificationEngine()
+    verification_results = verification_engine.aggregate_multi_account(enriched_accounts)
+
+    verified_count = sum(1 for result in verification_results.values()
+                        if result.verification_level.value in ['CONFIRMED', 'PROBABLE'])
+    print(f"    ✅ Verified {verified_count}/{len(verification_results)} data points")
+
+    # === Adverse Inference Analysis ===
+    print("[13/14] 🔍 Adverse Inference & Gap Analysis...")
+    adverse_engine = AdverseInferenceEngine()
+    adverse_results = adverse_engine.analyze(enriched_accounts, target_profile)
+
+    total_findings = (len(adverse_results['temporal_gaps']) +
+                     len(adverse_results['scrubbing_indicators']) +
+                     len(adverse_results['sock_puppet_indicators']) +
+                     len(adverse_results['opsec_indicators']) +
+                     len(adverse_results['anomalies']))
+    print(f"    ✅ Detected {total_findings} intelligence gaps/anomalies (Risk Score: {adverse_results['risk_score']}/100)")
+
+    # === OpSec Assessment ===
+    print("[14/14] 🔒 Operational Security Assessment...")
+    opsec_warning = OpSecWarning()
+    techniques_used = [
+        'passive_dns_lookup',
+        'whois_query',
+        'sherlock_enumeration',
+        'http_request_to_profile'
+    ]
+    opsec_report = opsec_warning.generate_opsec_report(techniques_used)
+    print(f"    ✅ OpSec assessment complete (Investigation footprint analyzed)")
+
+    print("\n✅ Professional intelligence analytics complete!\n")
 
     # =================================================================
     # SAVE TO DATABASE (Before Report)
@@ -671,7 +854,11 @@ def run_advanced_v3_investigation(target_name: str = None, use_ai: bool = True):
         temporal_patterns=temporal_patterns,
         graph_metrics=graph_metrics,
         nlp_results=nlp_results,
-        investigation_id=investigation_id
+        investigation_id=investigation_id,
+        pivot_result=pivot_result if 'pivot_result' in locals() else None,
+        verification_results=verification_results if 'verification_results' in locals() else None,
+        adverse_results=adverse_results if 'adverse_results' in locals() else None,
+        opsec_report=opsec_report if 'opsec_report' in locals() else None
     )
 
     # Save report
